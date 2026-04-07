@@ -203,35 +203,26 @@ export const useTeamStore = create<TeamState>((set, get) => ({
 
       // ── Supabase mode ──
       if (isSupabaseAvailable() && supabaseClient) {
-        // Direct query approach (no RPC dependency — works with RLS policy
-        // teams_select_by_invite_code from migration 20260331).
+        // Ensure auth session is valid before joining
+        await ensureValidSession();
 
-        // 1. Look up team by invite code
-        const { data: teamRow, error: lookupErr } = await supabaseClient
-          .from('teams')
-          .select('*')
-          .eq('invite_code', inviteCode.toUpperCase())
-          .maybeSingle();
+        // Use SECURITY DEFINER RPC function — bypasses RLS completely.
+        // The direct query approach fails when the teams_select_by_invite_code
+        // RLS policy hasn't been deployed, because the default teams_select
+        // policy only allows creators/members to read the teams table.
+        const { data: rpcResult, error: rpcErr } = await supabaseClient
+          .rpc('join_team_by_code', { p_invite_code: inviteCode.toUpperCase() });
 
-        if (lookupErr) throw new Error(lookupErr.message);
-        if (!teamRow) throw new Error('INVALID_INVITE_CODE');
-
-        // 2. Check if already a member
-        const { data: existing } = await supabaseClient
-          .from('team_members')
-          .select('id')
-          .eq('team_id', teamRow.id)
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        // 3. If not yet a member, insert
-        if (!existing) {
-          const { error: insertErr } = await supabaseClient
-            .from('team_members')
-            .insert({ team_id: teamRow.id, user_id: userId });
-          if (insertErr) throw new Error(insertErr.message);
+        if (rpcErr) {
+          const msg = rpcErr.message || '';
+          if (msg.includes('INVALID_INVITE_CODE')) {
+            throw new Error('INVALID_INVITE_CODE');
+          }
+          throw new Error(msg);
         }
+        if (!rpcResult) throw new Error('INVALID_INVITE_CODE');
 
+        const teamRow = rpcResult as any;
         const team: Team = {
           id: teamRow.id,
           name: teamRow.name,
