@@ -163,13 +163,19 @@ export const useMasterStore = create<MasterState>((set, get) => ({
       const sessionValid = userId ? await ensureValidSession() : false;
 
       if (isSupabaseAvailable() && supabaseClient && userId && sessionValid) {
-        // Filter by own user_id — don't merge teammates' master data into own lists
-        // (teammates' data is separate; merging caused deleted items to reappear)
+        // Team mode: read ALL team members' master data (RLS returns team scope)
+        // Solo mode: filter by own user_id only
+        const { connected: inTeam } = useTeamStore.getState();
+        const buildQuery = (table: string) => {
+          let q = supabaseClient!.from(table).select('name');
+          if (!inTeam) q = q.eq('user_id', userId);
+          return q.order('sort_order');
+        };
         const [shRes, prRes, actRes, fmtRes] = await Promise.all([
-          supabaseClient.from('stakeholders').select('name').eq('user_id', userId).order('sort_order'),
-          supabaseClient.from('projects').select('name').eq('user_id', userId).order('sort_order'),
-          supabaseClient.from('activities').select('name').eq('user_id', userId).order('sort_order'),
-          supabaseClient.from('formats').select('name').eq('user_id', userId).order('sort_order'),
+          buildQuery('stakeholders'),
+          buildQuery('projects'),
+          buildQuery('activities'),
+          buildQuery('formats'),
         ]);
 
         // If any query had an error, skip Supabase merge (keep localStorage as-is)
@@ -524,15 +530,22 @@ async function pullMasterDataFromSupabase(): Promise<void> {
   if (!sessionOk) return;
 
   // If user is in a team, wait for Team Key before decrypting
-  const { connected } = useTeamStore.getState();
-  if (connected && !hasTeamKey()) return;
+  const { connected: inTeam } = useTeamStore.getState();
+  if (inTeam && !hasTeamKey()) return;
 
   try {
+    // Team mode: read ALL team members' master data (RLS returns team scope)
+    // Solo mode: filter by own user_id only
+    const buildQuery = (table: string) => {
+      let q = supabaseClient!.from(table).select('name');
+      if (!inTeam) q = q.eq('user_id', userId);
+      return q.order('sort_order');
+    };
     const [shRes, prRes, actRes, fmtRes] = await Promise.all([
-      supabaseClient.from('stakeholders').select('name').eq('user_id', userId).order('sort_order'),
-      supabaseClient.from('projects').select('name').eq('user_id', userId).order('sort_order'),
-      supabaseClient.from('activities').select('name').eq('user_id', userId).order('sort_order'),
-      supabaseClient.from('formats').select('name').eq('user_id', userId).order('sort_order'),
+      buildQuery('stakeholders'),
+      buildQuery('projects'),
+      buildQuery('activities'),
+      buildQuery('formats'),
     ]);
 
     // Re-check suppress after async query
