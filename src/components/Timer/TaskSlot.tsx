@@ -393,6 +393,7 @@ const TaskSlot: React.FC<TaskSlotProps> = ({ slot }) => {
       {showAddStakeholder && (
         <div className="flex gap-1 mb-2">
           <input
+            id="ts-new-stakeholder"
             type="text"
             placeholder={t('ph.newStakeholder')}
             value={newStakeholder}
@@ -404,6 +405,7 @@ const TaskSlot: React.FC<TaskSlotProps> = ({ slot }) => {
             onBlur={() => { if (!newStakeholder.trim()) { setShowAddStakeholder(false); setNewStakeholder(''); } }}
             style={inlineInputStyle}
             autoFocus
+            aria-label={t('ph.newStakeholder')}
           />
           <button
             onClick={handleAddStakeholder}
@@ -422,6 +424,7 @@ const TaskSlot: React.FC<TaskSlotProps> = ({ slot }) => {
       {showAddProject && (
         <div className="flex gap-1 mb-2">
           <input
+            id="ts-new-project"
             type="text"
             placeholder={t('ph.newProjekt')}
             value={newProject}
@@ -433,6 +436,7 @@ const TaskSlot: React.FC<TaskSlotProps> = ({ slot }) => {
             onBlur={() => { if (!newProject.trim()) { setShowAddProject(false); setNewProject(''); } }}
             style={inlineInputStyle}
             autoFocus
+            aria-label={t('ph.newProjekt')}
           />
           <button
             onClick={handleAddProject}
@@ -451,6 +455,7 @@ const TaskSlot: React.FC<TaskSlotProps> = ({ slot }) => {
       {showAddActivity && (
         <div className="flex gap-1 mb-2">
           <input
+            id="ts-new-activity"
             type="text"
             placeholder={t('ph.newTaetigkeit')}
             value={newActivity}
@@ -462,6 +467,7 @@ const TaskSlot: React.FC<TaskSlotProps> = ({ slot }) => {
             onBlur={() => { if (!newActivity.trim()) { setShowAddActivity(false); setNewActivity(''); } }}
             style={inlineInputStyle}
             autoFocus
+            aria-label={t('ph.newTaetigkeit')}
           />
           <button
             onClick={handleAddActivity}
@@ -480,6 +486,7 @@ const TaskSlot: React.FC<TaskSlotProps> = ({ slot }) => {
 
       {/* Note */}
       <input
+        id="ts-notiz"
         type="text"
         placeholder={t('ph.notiz')}
         value={slot.notiz || ''}
@@ -488,6 +495,7 @@ const TaskSlot: React.FC<TaskSlotProps> = ({ slot }) => {
           ...selectStyle,
           width: '100%',
         }}
+        aria-label={t('ph.notiz')}
       />
     </div>
   );

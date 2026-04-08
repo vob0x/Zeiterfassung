@@ -303,6 +303,7 @@ export default function ManageView() {
             >
               {editingType === type && editingOriginalName === item ? (
                 <input
+                  id="manage-edit-name"
                   type="text"
                   value={editingName}
                   onChange={(e) => setEditingName(e.target.value)}
@@ -317,6 +318,7 @@ export default function ManageView() {
                     }
                   }}
                   autoFocus
+                  aria-label="Edit name"
                 />
               ) : (
                 <span style={{ color: 'var(--text-secondary)' }} className="flex-1">{item}</span>
@@ -349,6 +351,7 @@ export default function ManageView() {
 
         <div className="flex gap-2">
           <input
+            id="manage-add-new"
             type="text"
             placeholder={t('manage.addNew')}
             value={newValue}
@@ -360,6 +363,7 @@ export default function ManageView() {
               }
             }}
             className="input flex-1 text-sm"
+            aria-label={t('manage.addNew')}
           />
           <button
             onClick={() => {
@@ -420,6 +424,7 @@ export default function ManageView() {
           <label className="btn btn-primary cursor-pointer text-center">
             {t('btn.restore')}
             <input
+              id="manage-restore-file"
               type="file"
               accept=".json"
               onChange={(e) => {
@@ -427,6 +432,7 @@ export default function ManageView() {
                 if (file) handleBackupImport(file);
               }}
               className="hidden"
+              aria-label={t('btn.restore')}
             />
           </label>
           <button
@@ -439,6 +445,7 @@ export default function ManageView() {
           <label className="btn btn-success cursor-pointer text-center disabled:opacity-50">
             {t('btn.csvImport')}
             <input
+              id="manage-csv-import"
               type="file"
               accept=".csv"
               onChange={(e) => {
@@ -446,6 +453,7 @@ export default function ManageView() {
                 if (file) handleCSVImport(file);
               }}
               className="hidden"
+              aria-label={t('btn.csvImport')}
             />
           </label>
         </div>

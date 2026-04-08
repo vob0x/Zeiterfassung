@@ -198,10 +198,11 @@ const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, isOpen, onClose 
         <div className="space-y-4 p-5 sm:p-6 overflow-y-auto flex-1 min-h-0" style={{ WebkitOverflowScrolling: 'touch' }}>
           {/* Date */}
           <div>
-            <label className="block text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label htmlFor="edit-date" className="block text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
               {t('label.datum')}
             </label>
             <input
+              id="edit-date"
               type="date"
               value={formData.date}
               onChange={(e) => setFormData({ ...formData, date: e.target.value })}
@@ -213,11 +214,12 @@ const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, isOpen, onClose 
 
           {/* Stakeholder */}
           <div>
-            <label className="block text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label htmlFor="edit-stakeholder" className="block text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
               {t('label.stakeholder')}
             </label>
             <div className="flex gap-1">
               <select
+                id="edit-stakeholder"
                 value={formData.stakeholder}
                 onChange={(e) => setFormData({ ...formData, stakeholder: e.target.value })}
                 className="flex-1 px-3 py-2 rounded text-sm"
@@ -240,12 +242,14 @@ const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, isOpen, onClose 
             {showAddStakeholder && (
               <div className="flex gap-1 mt-2">
                 <input
+                  id="edit-new-stakeholder"
                   type="text"
                   placeholder={t('ph.newStakeholder')}
                   value={newStakeholder}
                   onChange={(e) => setNewStakeholder(e.target.value)}
                   className="flex-1 px-3 py-2 rounded text-sm"
                   style={inputStyle}
+                  aria-label={t('ph.newStakeholder')}
                 />
                 <button
                   type="button"
@@ -262,11 +266,12 @@ const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, isOpen, onClose 
 
           {/* Project */}
           <div>
-            <label className="block text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label htmlFor="edit-project" className="block text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
               {t('label.projekt')}
             </label>
             <div className="flex gap-1">
               <select
+                id="edit-project"
                 value={formData.projekt}
                 onChange={(e) => setFormData({ ...formData, projekt: e.target.value })}
                 className="flex-1 px-3 py-2 rounded text-sm"
@@ -289,12 +294,14 @@ const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, isOpen, onClose 
             {showAddProject && (
               <div className="flex gap-1 mt-2">
                 <input
+                  id="edit-new-project"
                   type="text"
                   placeholder={t('ph.newProjekt')}
                   value={newProject}
                   onChange={(e) => setNewProject(e.target.value)}
                   className="flex-1 px-3 py-2 rounded text-sm"
                   style={inputStyle}
+                  aria-label={t('ph.newProjekt')}
                 />
                 <button
                   type="button"
@@ -311,11 +318,12 @@ const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, isOpen, onClose 
 
           {/* Activity */}
           <div>
-            <label className="block text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label htmlFor="edit-activity" className="block text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
               {t('label.taetigkeit')}
             </label>
             <div className="flex gap-1">
               <select
+                id="edit-activity"
                 value={formData.taetigkeit}
                 onChange={(e) => setFormData({ ...formData, taetigkeit: e.target.value })}
                 className="flex-1 px-3 py-2 rounded text-sm"
@@ -338,12 +346,14 @@ const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, isOpen, onClose 
             {showAddActivity && (
               <div className="flex gap-1 mt-2">
                 <input
+                  id="edit-new-activity"
                   type="text"
                   placeholder={t('ph.newTaetigkeit')}
                   value={newActivity}
                   onChange={(e) => setNewActivity(e.target.value)}
                   className="flex-1 px-3 py-2 rounded text-sm"
                   style={inputStyle}
+                  aria-label={t('ph.newTaetigkeit')}
                 />
                 <button
                   type="button"
@@ -360,10 +370,11 @@ const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, isOpen, onClose 
 
           {/* Start Time */}
           <div>
-            <label className="block text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label htmlFor="edit-start" className="block text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
               {t('label.von')}
             </label>
             <input
+              id="edit-start"
               type="time"
               value={formData.start_time}
               onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
@@ -375,10 +386,11 @@ const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, isOpen, onClose 
 
           {/* End Time */}
           <div>
-            <label className="block text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label htmlFor="edit-end" className="block text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
               {t('label.bis')}
             </label>
             <input
+              id="edit-end"
               type="time"
               value={formData.end_time}
               onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}

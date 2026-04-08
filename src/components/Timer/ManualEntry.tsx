@@ -301,25 +301,25 @@ const ManualEntry: React.FC<ManualEntryProps> = ({ embedded = false }) => {
         {/* Inline add rows */}
         {showAddStakeholder && (
           <div className="flex gap-1 mb-2">
-            <input type="text" placeholder={t('ph.newStakeholder')} value={newStakeholder} onChange={(e) => setNewStakeholder(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddStakeholder())} style={{ ...selectStyle, flex: 1 }} />
+            <input id="me-new-stakeholder" type="text" aria-label={t('ph.newStakeholder')} placeholder={t('ph.newStakeholder')} value={newStakeholder} onChange={(e) => setNewStakeholder(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddStakeholder())} style={{ ...selectStyle, flex: 1 }} />
             <button type="button" onClick={handleAddStakeholder} style={{ padding: '4px 8px', background: 'var(--success)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>{t('btn.save')}</button>
           </div>
         )}
         {showAddProject && (
           <div className="flex gap-1 mb-2">
-            <input type="text" placeholder={t('ph.newProjekt')} value={newProject} onChange={(e) => setNewProject(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddProject())} style={{ ...selectStyle, flex: 1 }} />
+            <input id="me-new-project" type="text" aria-label={t('ph.newProjekt')} placeholder={t('ph.newProjekt')} value={newProject} onChange={(e) => setNewProject(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddProject())} style={{ ...selectStyle, flex: 1 }} />
             <button type="button" onClick={handleAddProject} style={{ padding: '4px 8px', background: 'var(--success)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>{t('btn.save')}</button>
           </div>
         )}
         {showAddActivity && (
           <div className="flex gap-1 mb-2">
-            <input type="text" placeholder={t('ph.newTaetigkeit')} value={newActivity} onChange={(e) => setNewActivity(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddActivity())} style={{ ...selectStyle, flex: 1 }} />
+            <input id="me-new-activity" type="text" aria-label={t('ph.newTaetigkeit')} placeholder={t('ph.newTaetigkeit')} value={newActivity} onChange={(e) => setNewActivity(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddActivity())} style={{ ...selectStyle, flex: 1 }} />
             <button type="button" onClick={handleAddActivity} style={{ padding: '4px 8px', background: 'var(--success)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>{t('btn.save')}</button>
           </div>
         )}
         {showAddFormat && (
           <div className="flex gap-1 mb-2">
-            <input type="text" placeholder={t('ph.newFormat')} value={newFormat} onChange={(e) => setNewFormat(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFormat())} style={{ ...selectStyle, flex: 1 }} />
+            <input id="me-new-format" type="text" aria-label={t('ph.newFormat')} placeholder={t('ph.newFormat')} value={newFormat} onChange={(e) => setNewFormat(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFormat())} style={{ ...selectStyle, flex: 1 }} />
             <button type="button" onClick={handleAddFormat} style={{ padding: '4px 8px', background: 'var(--success)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>{t('btn.save')}</button>
           </div>
         )}
@@ -337,10 +337,11 @@ const ManualEntry: React.FC<ManualEntryProps> = ({ embedded = false }) => {
         {/* Date, Time From, Time To, Save - V5.15 inline row */}
         <div style={{ display: 'flex', gap: '8px', alignItems: 'end', flexWrap: 'wrap' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '4px', fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.02em', color: 'var(--text-muted)' }}>
+            <label htmlFor="me-date" style={{ display: 'block', marginBottom: '4px', fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.02em', color: 'var(--text-muted)' }}>
               {t('label.datum')}
             </label>
             <input
+              id="me-date"
               type="date"
               value={formData.date}
               onChange={(e) => setFormData({ ...formData, date: e.target.value })}
@@ -348,10 +349,11 @@ const ManualEntry: React.FC<ManualEntryProps> = ({ embedded = false }) => {
             />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '4px', fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.02em', color: 'var(--text-muted)' }}>
+            <label htmlFor="me-start" style={{ display: 'block', marginBottom: '4px', fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.02em', color: 'var(--text-muted)' }}>
               {t('label.von')}
             </label>
             <input
+              id="me-start"
               type="time"
               value={formData.startTime}
               onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
@@ -359,10 +361,11 @@ const ManualEntry: React.FC<ManualEntryProps> = ({ embedded = false }) => {
             />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '4px', fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.02em', color: 'var(--text-muted)' }}>
+            <label htmlFor="me-end" style={{ display: 'block', marginBottom: '4px', fontFamily: 'var(--font-display)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.02em', color: 'var(--text-muted)' }}>
               {t('label.bis')}
             </label>
             <input
+              id="me-end"
               type="time"
               value={formData.endTime}
               onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}

@@ -378,6 +378,7 @@ const FuzzySearch: React.FC<FuzzySearchProps> = ({ onSelect }) => {
       >
         <span style={{ fontSize: '14px', opacity: isOpen ? 0.8 : 0.3, transition: 'opacity 0.2s' }}>⚡</span>
         <input
+          id="fuzzy-search"
           ref={inputRef}
           type="text"
           value={query}
@@ -399,6 +400,7 @@ const FuzzySearch: React.FC<FuzzySearchProps> = ({ onSelect }) => {
             outline: 'none',
             fontFamily: 'var(--font)',
           }}
+          aria-label={t('stack.searchPlaceholder')}
         />
         {query && (
           <button

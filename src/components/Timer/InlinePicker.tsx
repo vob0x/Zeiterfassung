@@ -167,6 +167,7 @@ const InlinePicker: React.FC<InlinePickerProps> = ({
           {/* Search input */}
           <div style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>
             <input
+              id="picker-filter"
               ref={inputRef}
               type="text"
               value={filter}
@@ -191,6 +192,7 @@ const InlinePicker: React.FC<InlinePickerProps> = ({
                 outline: 'none',
                 fontFamily: 'var(--font)',
               }}
+              aria-label={t('stack.search')}
             />
           </div>
 
@@ -236,6 +238,7 @@ const InlinePicker: React.FC<InlinePickerProps> = ({
               {isAdding ? (
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <input
+                    id="picker-new-value"
                     ref={newInputRef}
                     type="text"
                     value={newValue}
@@ -256,6 +259,7 @@ const InlinePicker: React.FC<InlinePickerProps> = ({
                       outline: 'none',
                       fontFamily: 'var(--font)',
                     }}
+                    aria-label={addPlaceholder || 'Add new value'}
                   />
                   <button
                     onClick={handleAdd}
