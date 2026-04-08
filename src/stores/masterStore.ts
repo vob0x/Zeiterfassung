@@ -166,6 +166,17 @@ export const useMasterStore = create<MasterState>((set, get) => ({
         // Team mode: read ALL team members' master data (RLS returns team scope)
         // Solo mode: filter by own user_id only
         const { connected: inTeam } = useTeamStore.getState();
+
+        // If user is in a team, wait briefly for Team Key (syncTeamData may still be restoring it)
+        if (inTeam && !hasTeamKey()) {
+          for (let i = 0; i < 6; i++) {
+            await new Promise((r) => setTimeout(r, 500));
+            if (hasTeamKey()) break;
+          }
+          if (!hasTeamKey()) {
+            console.warn('[MasterData] Team Key not available after waiting — decryption may use Personal Key fallback');
+          }
+        }
         const buildQuery = (table: string) => {
           let q = supabaseClient!.from(table).select('name');
           if (!inTeam) q = q.eq('user_id', userId);
@@ -529,9 +540,16 @@ export async function pullMasterDataFromSupabase(): Promise<void> {
   const sessionOk = await ensureValidSession();
   if (!sessionOk) return;
 
-  // If user is in a team, wait for Team Key before decrypting
+  // If user is in a team, wait briefly for Team Key before decrypting
   const { connected: inTeam } = useTeamStore.getState();
-  if (inTeam && !hasTeamKey()) return;
+  if (inTeam && !hasTeamKey()) {
+    // Wait up to 2s for Team Key (syncTeamData may be restoring it)
+    for (let i = 0; i < 4; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      if (hasTeamKey()) break;
+    }
+    // Proceed even without Team Key — decryptFieldSmart falls back to Personal Key
+  }
 
   try {
     // Team mode: read ALL team members' master data (RLS returns team scope)

@@ -879,10 +879,16 @@ export async function pullEntriesFromSupabase(): Promise<void> {
   const sessionOk = await ensureValidSession();
   if (!sessionOk) return;
 
-  // If user is in a team, wait for Team Key to be available before decrypting
-  // (entries are encrypted with the Team Key when in a team)
+  // If user is in a team, wait briefly for Team Key before decrypting
   const { connected } = useTeamStore.getState();
-  if (connected && !hasTeamKey()) return; // Team Key not yet restored — skip this poll cycle
+  if (connected && !hasTeamKey()) {
+    // Wait up to 2s for Team Key (syncTeamData may be restoring it)
+    for (let i = 0; i < 4; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      if (hasTeamKey()) break;
+    }
+    // Proceed even without Team Key — decryptFieldSmart falls back to Personal Key
+  }
 
   try {
     const { data, error: sbErr } = await supabaseClient

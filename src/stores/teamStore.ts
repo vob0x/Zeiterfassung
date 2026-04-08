@@ -92,11 +92,14 @@ export const useTeamStore = create<TeamState>((set, get) => ({
           teamKeyB64, inviteCode, teamData.id
         );
 
-        // Update team with encrypted Team Key
-        await supabaseClient
+        // Update team with encrypted Team Key (check for errors!)
+        const { error: tkErr } = await supabaseClient
           .from('teams')
           .update({ encrypted_team_key: transportEncryptedKey })
           .eq('id', teamData.id);
+        if (tkErr) {
+          console.error('[Team E2E] Failed to store transport-encrypted Team Key:', tkErr.message);
+        }
 
         // Encrypt Team Key with creator's personal key (for session persistence)
         let personalEncryptedKey = '';
@@ -455,10 +458,12 @@ export const useTeamStore = create<TeamState>((set, get) => ({
           return;
         }
 
-        // Restore Team Key from personal-key-encrypted copy (if not already in session)
+        // ── Team Key Restoration (3-tier fallback + auto-generate) ──
+        // Priority: sessionStorage → team_members (personal-encrypted) →
+        //           teams table (transport-encrypted) → generate new key
         if (!hasTeamKey() && hasEncryptionKey()) {
+          // Path 1: Personal-key-encrypted copy on team_members row
           if (membershipData[0].encrypted_team_key) {
-            // Primary path: decrypt from personal-key-encrypted copy on team_members row
             try {
               const teamKeyB64 = await decryptTeamKeyWithPersonalKey(
                 membershipData[0].encrypted_team_key
@@ -466,33 +471,60 @@ export const useTeamStore = create<TeamState>((set, get) => ({
               setTeamKey(teamKeyB64);
               console.info('[Team E2E] Team Key restored from personal-encrypted copy');
             } catch (e) {
-              console.warn('[Team E2E] Could not restore Team Key from personal copy:', e);
+              console.warn('[Team E2E] Path 1 failed (personal copy):', e);
             }
+          } else {
+            console.info('[Team E2E] Path 1 skipped — no encrypted_team_key on team_members row');
           }
 
-          // Fallback: if still no Team Key, try transport-encrypted copy from teams table
-          // (uses invite_code — works even if encrypted_team_key was never persisted to team_members)
-          if (!hasTeamKey() && teamData.encrypted_team_key && teamData.invite_code) {
-            try {
-              const teamKeyB64 = await decryptTeamKeyFromTransport(
-                teamData.encrypted_team_key,
-                teamData.invite_code,
-                teamData.id
-              );
-              setTeamKey(teamKeyB64);
-              console.info('[Team E2E] Team Key restored from transport-encrypted copy (teams table)');
-            } catch (e) {
-              console.warn('[Team E2E] Could not restore Team Key from transport copy:', e);
-            }
-          }
-
+          // Path 2: Transport-encrypted copy from teams table (invite-code-derived key)
           if (!hasTeamKey()) {
-            console.warn('[Team E2E] Team Key unavailable after all restore attempts.');
+            if (teamData.encrypted_team_key && teamData.invite_code) {
+              try {
+                const teamKeyB64 = await decryptTeamKeyFromTransport(
+                  teamData.encrypted_team_key,
+                  teamData.invite_code,
+                  teamData.id
+                );
+                setTeamKey(teamKeyB64);
+                console.info('[Team E2E] Team Key restored from transport-encrypted copy');
+              } catch (e) {
+                console.warn('[Team E2E] Path 2 failed (transport copy):', e);
+              }
+            } else {
+              console.info('[Team E2E] Path 2 skipped — teams.encrypted_team_key or invite_code is null');
+            }
+          }
+
+          // Path 3: Team Key is unrecoverable → generate a new one.
+          // This happens when the team was created before the E2E columns existed,
+          // or when the DB was reset. Since no Team Key ever existed, all entries
+          // were encrypted with the Personal Key and remain decryptable.
+          // The new Team Key will be used for FUTURE entries only.
+          if (!hasTeamKey()) {
+            console.warn('[Team E2E] Team Key unrecoverable — generating a new Team Key');
+            try {
+              const newTeamKeyB64 = await generateTeamKey();
+              setTeamKey(newTeamKeyB64);
+
+              // Persist transport-encrypted copy to teams table
+              const transportEncrypted = await encryptTeamKeyForTransport(
+                newTeamKeyB64, teamData.invite_code, teamData.id
+              );
+              await supabaseClient
+                .from('teams')
+                .update({ encrypted_team_key: transportEncrypted })
+                .eq('id', teamId);
+
+              console.info('[Team E2E] New Team Key generated and stored on teams table');
+            } catch (e) {
+              console.error('[Team E2E] Failed to generate new Team Key:', e);
+            }
           }
         }
 
-        // If Team Key is in session but NOT persisted to team_members row, save it now
-        // (handles first-time restore or cross-device scenario)
+        // Persist Team Key to team_members row (if not already there)
+        // This ensures the key survives across sessions/devices via Path 1
         if (hasTeamKey() && hasEncryptionKey() && !membershipData[0].encrypted_team_key) {
           try {
             const personalEncrypted = await encryptTeamKeyWithPersonalKey(getTeamKeyB64()!);
@@ -503,7 +535,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
               .eq('user_id', profile.id);
             console.info('[Team E2E] Persisted Team Key to team_members row');
           } catch (e) {
-            // Non-critical — will retry next sync
+            console.warn('[Team E2E] Could not persist Team Key to team_members:', e);
           }
         }
 
