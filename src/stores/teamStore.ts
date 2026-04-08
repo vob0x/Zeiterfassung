@@ -442,9 +442,23 @@ export const useTeamStore = create<TeamState>((set, get) => ({
 
         const teamId = membershipData[0].team_id;
 
+        // Fetch team details FIRST — we need invite_code + encrypted_team_key
+        // for Team Key restoration fallback
+        const { data: teamData } = await supabaseClient
+          .from('teams')
+          .select('*')
+          .eq('id', teamId)
+          .single();
+
+        if (!teamData) {
+          set({ loading: false, connected: false });
+          return;
+        }
+
         // Restore Team Key from personal-key-encrypted copy (if not already in session)
         if (!hasTeamKey() && hasEncryptionKey()) {
           if (membershipData[0].encrypted_team_key) {
+            // Primary path: decrypt from personal-key-encrypted copy on team_members row
             try {
               const teamKeyB64 = await decryptTeamKeyWithPersonalKey(
                 membershipData[0].encrypted_team_key
@@ -454,13 +468,31 @@ export const useTeamStore = create<TeamState>((set, get) => ({
             } catch (e) {
               console.warn('[Team E2E] Could not restore Team Key from personal copy:', e);
             }
-          } else {
-            console.warn('[Team E2E] No encrypted_team_key on team_members row — Team Key unavailable. User must re-join with invite code to restore.');
+          }
+
+          // Fallback: if still no Team Key, try transport-encrypted copy from teams table
+          // (uses invite_code — works even if encrypted_team_key was never persisted to team_members)
+          if (!hasTeamKey() && teamData.encrypted_team_key && teamData.invite_code) {
+            try {
+              const teamKeyB64 = await decryptTeamKeyFromTransport(
+                teamData.encrypted_team_key,
+                teamData.invite_code,
+                teamData.id
+              );
+              setTeamKey(teamKeyB64);
+              console.info('[Team E2E] Team Key restored from transport-encrypted copy (teams table)');
+            } catch (e) {
+              console.warn('[Team E2E] Could not restore Team Key from transport copy:', e);
+            }
+          }
+
+          if (!hasTeamKey()) {
+            console.warn('[Team E2E] Team Key unavailable after all restore attempts.');
           }
         }
 
         // If Team Key is in session but NOT persisted to team_members row, save it now
-        // (handles case where user joined on device A and opens device B for the first time)
+        // (handles first-time restore or cross-device scenario)
         if (hasTeamKey() && hasEncryptionKey() && !membershipData[0].encrypted_team_key) {
           try {
             const personalEncrypted = await encryptTeamKeyWithPersonalKey(getTeamKeyB64()!);
@@ -473,18 +505,6 @@ export const useTeamStore = create<TeamState>((set, get) => ({
           } catch (e) {
             // Non-critical — will retry next sync
           }
-        }
-
-        // Fetch team details
-        const { data: teamData } = await supabaseClient
-          .from('teams')
-          .select('*')
-          .eq('id', teamId)
-          .single();
-
-        if (!teamData) {
-          set({ loading: false, connected: false });
-          return;
         }
 
         const team: Team = {
