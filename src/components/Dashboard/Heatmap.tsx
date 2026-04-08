@@ -19,7 +19,7 @@ function getIntensityStyle(hours: number): React.CSSProperties {
 
 export function Heatmap({ entries, onDrillDown }: HeatmapProps) {
   const { t } = useI18n();
-  const { stakeholders, projects, matrix, totals } = useMemo(() => {
+  const { stakeholders, projects, matrix, totals, wallClockTotal } = useMemo(() => {
     // Handle stakeholder as array: flatten all stakeholders
     const allStakeholders = new Set<string>();
     entries.forEach((e) => {
@@ -31,7 +31,6 @@ export function Heatmap({ entries, onDrillDown }: HeatmapProps) {
 
     const matrix: Record<string, Record<string, number>> = {};
     const stakeholderTotals: Record<string, number> = {};
-    const projectTotals: Record<string, number> = {};
 
     // Initialize
     for (const sh of uniqueStakeholders) {
@@ -53,15 +52,32 @@ export function Heatmap({ entries, onDrillDown }: HeatmapProps) {
         const hours = totalMs / (1000 * 60 * 60);
         matrix[sh][pr] = hours;
         stakeholderTotals[sh] += hours;
-        projectTotals[pr] = (projectTotals[pr] || 0) + hours;
       }
     }
+
+    // Wall-clock totals: each entry counted ONCE (not per stakeholder)
+    const projectTotals: Record<string, number> = {};
+    let wallClockTotalMs = 0;
+    for (const e of entries) {
+      const ms = getEffectiveDurationMs(e);
+      wallClockTotalMs += ms;
+      const pr = e.projekt;
+      if (pr && pr.trim()) {
+        projectTotals[pr] = (projectTotals[pr] || 0) + ms;
+      }
+    }
+    // Convert project totals to hours
+    for (const pr of Object.keys(projectTotals)) {
+      projectTotals[pr] = projectTotals[pr] / (1000 * 60 * 60);
+    }
+    const wallClockTotal = wallClockTotalMs / (1000 * 60 * 60);
 
     return {
       stakeholders: uniqueStakeholders,
       projects: uniqueProjects,
       matrix,
       totals: { stakeholder: stakeholderTotals, project: projectTotals },
+      wallClockTotal,
     };
   }, [entries]);
 
@@ -135,7 +151,7 @@ export function Heatmap({ entries, onDrillDown }: HeatmapProps) {
               </td>
             ))}
             <td className="p-2 text-center text-sm font-bold border" style={{ color: 'var(--neon-cyan)', background: 'rgba(var(--surface-rgb), 0.7)', borderColor: 'rgba(var(--border-rgb), 0.3)' }}>
-              {formatHoursAdaptive(Object.values(totals.stakeholder).reduce((a, b) => a + b, 0))}
+              {formatHoursAdaptive(wallClockTotal)}
             </td>
           </tr>
         </tbody>
