@@ -134,18 +134,40 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
       set({ entries: localEntries, loading: false });
 
       // Then merge with Supabase data (only if encryption key is available for decryption)
-      // Also require Team Key if user is in a team (entries are team-key encrypted)
       const profile = useAuthStore.getState().profile;
-      const { connected: inTeam } = useTeamStore.getState();
-      const keyReady = hasEncryptionKey() && (!inTeam || hasTeamKey());
-      if (isSupabaseAvailable() && supabaseClient && keyReady && profile?.id && !profile.id.startsWith('local_')) {
+      if (isSupabaseAvailable() && supabaseClient && hasEncryptionKey() && profile?.id && !profile.id.startsWith('local_')) {
+        // Ensure auth session is valid (token may have expired after app close on iOS)
+        const sessionOk = await ensureValidSession();
+        if (!sessionOk) {
+          console.warn('[Entries] Session expired, could not refresh — using localStorage');
+          return;
+        }
+
+        // If user is in a team, wait briefly for Team Key if not yet available
+        // (syncTeamData may still be restoring it)
+        const { connected: inTeam } = useTeamStore.getState();
+        if (inTeam && !hasTeamKey()) {
+          // Wait up to 3 seconds for Team Key to become available
+          for (let i = 0; i < 6; i++) {
+            await new Promise((r) => setTimeout(r, 500));
+            if (hasTeamKey()) break;
+          }
+          if (!hasTeamKey()) {
+            console.warn('[Entries] Team Key not available after waiting — proceeding without (fields may not decrypt)');
+          }
+        }
+
         const { data, error: sbErr } = await supabaseClient
           .from('time_entries')
           .select('*')
           .eq('user_id', profile.id)
           .order('date', { ascending: false });
 
+        if (sbErr) {
+          console.warn('[Entries] Supabase fetch error:', sbErr.message, '— keeping localStorage data');
+        }
         if (!sbErr && data) {
+          console.info(`[Entries] Supabase returned ${data.length} entries`);
           // Decrypt entries from Supabase
           const sbEntries: TimeEntry[] = await Promise.all(
             data.map(async (row: any) => {
