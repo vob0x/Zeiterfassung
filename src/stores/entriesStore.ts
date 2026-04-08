@@ -254,6 +254,139 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
           // Log decryption statistics
           logDecryptStats();
 
+          // ── One-time re-encryption migration ──
+          // Entries encrypted with a lost Team Key need to be restored.
+          // Uses a CSV-derived lookup (embedded at build time) to recover
+          // plaintext for entries where decryption fails.
+          const failedCount = _batchDecryptFail;
+          if (failedCount > 0 && hasEncryptionKey()) {
+            const REENCRYPT_KEY = 'ze_reencrypt_done_v3';
+            const alreadyDone = localStorage.getItem(REENCRYPT_KEY);
+            if (!alreadyDone) {
+              console.info(`[ReEncrypt] ${failedCount} fields failed — running CSV-based restore + re-encryption`);
+
+              // CSV-derived lookup: "date|HH:MM|HH:MM" → [stakeholder, projekt, format, taetigkeit, notiz]
+              let csvLookup: Record<string, string[]> = {};
+              try {
+                csvLookup = (await import('@/data/csvRestore.json')).default as any;
+                console.info(`[ReEncrypt] CSV lookup loaded: ${Object.keys(csvLookup).length} entries`);
+              } catch (e) {
+                console.warn('[ReEncrypt] CSV lookup not available — will clean unrecoverable fields');
+              }
+
+              let reEncrypted = 0;
+              let restoredFromCSV = 0;
+              let cleaned = 0;
+              for (let i = 0; i < data.length; i += 50) {
+                const batch = data.slice(i, i + 50);
+                for (const row of batch) {
+                  let needsUpdate = false;
+                  const updatedRow: Record<string, any> = { id: row.id };
+                  // Build lookup key: date|start_time(HH:MM)|end_time(HH:MM)
+                  const st = (row.start_time || '').slice(0, 5);
+                  const et = (row.end_time || '').slice(0, 5);
+                  const lookupKey = `${row.date}|${st}|${et}`;
+                  const csvEntry = csvLookup[lookupKey]; // [stakeholder, projekt, format, taetigkeit, notiz]
+
+                  for (let fi = 0; fi < ENCRYPTED_ENTRY_FIELDS.length; fi++) {
+                    const field = ENCRYPTED_ENTRY_FIELDS[fi];
+                    const raw = row[field];
+                    if (raw && typeof raw === 'string' && raw.startsWith('enc:')) {
+                      // Try to decrypt with current keys
+                      const decrypted = await decryptFieldSmart(raw);
+                      if (decrypted && decrypted !== '') {
+                        // Success — re-encrypt with current Team Key
+                        updatedRow[field] = await encryptFieldForTeam(
+                          field === 'stakeholder' ? decrypted : decrypted
+                        );
+                        reEncrypted++;
+                      } else if (csvEntry) {
+                        // Decryption failed — restore from CSV
+                        // CSV order: [stakeholder, projekt, format, taetigkeit, notiz]
+                        const csvFieldMap: Record<string, number> = {
+                          stakeholder: 0, projekt: 1, format: 2, taetigkeit: 3, notiz: 4
+                        };
+                        const csvIdx = csvFieldMap[field];
+                        const csvValue = csvIdx !== undefined ? csvEntry[csvIdx] : '';
+                        if (csvValue) {
+                          // Stakeholder in CSV may be comma-separated "NDG-Revision, GS-VBS"
+                          if (field === 'stakeholder') {
+                            const arr = csvValue.split(', ').map((s: string) => s.trim()).filter(Boolean);
+                            updatedRow[field] = await encryptFieldForTeam(JSON.stringify(arr));
+                          } else {
+                            updatedRow[field] = await encryptFieldForTeam(csvValue);
+                          }
+                          restoredFromCSV++;
+                        } else {
+                          updatedRow[field] = '';
+                          cleaned++;
+                        }
+                      } else {
+                        // No CSV fallback — data is lost
+                        updatedRow[field] = '';
+                        cleaned++;
+                      }
+                      needsUpdate = true;
+                    }
+                  }
+                  if (needsUpdate) {
+                    updatedRow.updated_at = new Date().toISOString();
+                    const { id: rowId, ...fields } = updatedRow;
+                    await supabaseClient
+                      .from('time_entries')
+                      .update(fields)
+                      .eq('id', rowId);
+                  }
+                }
+                // Log progress for long batches
+                if (data.length > 100) {
+                  console.info(`[ReEncrypt] Progress: ${Math.min(i + 50, data.length)}/${data.length} entries processed`);
+                }
+              }
+              console.info(`[ReEncrypt] Done: ${reEncrypted} re-encrypted, ${restoredFromCSV} restored from CSV, ${cleaned} unrecoverable`);
+              localStorage.setItem(REENCRYPT_KEY, Date.now().toString());
+
+              // Re-fetch after migration to get clean data
+              const { data: freshData } = await supabaseClient
+                .from('time_entries')
+                .select('*')
+                .eq('user_id', profile.id)
+                .order('date', { ascending: false });
+              if (freshData) {
+                resetDecryptStats();
+                const freshEntries: TimeEntry[] = await Promise.all(
+                  freshData.map(async (row: any) => {
+                    const decrypted = await decryptEntryFromSupabase(row);
+                    let stakeholder: string | string[] = decrypted.stakeholder || '';
+                    if (typeof stakeholder === 'string' && stakeholder) {
+                      stakeholder = [stakeholder];
+                    }
+                    return {
+                      id: decrypted.id,
+                      user_id: decrypted.user_id,
+                      date: typeof decrypted.date === 'string' ? decrypted.date : formatDateISO(new Date(decrypted.date)),
+                      stakeholder,
+                      projekt: decrypted.projekt || '',
+                      taetigkeit: decrypted.taetigkeit || '',
+                      format: decrypted.format || 'Einzelarbeit',
+                      start_time: decrypted.start_time || '',
+                      end_time: decrypted.end_time || '',
+                      duration_ms: decrypted.duration_ms || 0,
+                      notiz: decrypted.notiz || '',
+                      created_at: decrypted.created_at || '',
+                      updated_at: decrypted.updated_at || '',
+                    };
+                  })
+                );
+                logDecryptStats();
+                set({ entries: freshEntries });
+                setUserData('entries', freshEntries);
+                set({ loading: false });
+                return; // Skip the normal merge logic below
+              }
+            }
+          }
+
           // Supabase responded successfully — it is the source of truth.
           // Deduplicate by ID (in case Supabase has duplicate rows)
           const sbByIdMap = new Map<string, TimeEntry>();
