@@ -847,7 +847,7 @@ export function markEntryPending(id: string): void {
   _savePendingIds(_pendingLocalIds);
 }
 
-async function pullEntriesFromSupabase(): Promise<void> {
+export async function pullEntriesFromSupabase(): Promise<void> {
   if (Date.now() < _entriesSuppressUntil) return;
 
   const profile = useAuthStore.getState().profile;

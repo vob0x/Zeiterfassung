@@ -610,7 +610,7 @@ async function pushTimersToSupabase(slots: SerializedSlot[]): Promise<void> {
 let _pollInterval: ReturnType<typeof setInterval> | null = null;
 let _realtimeChannel: any = null;
 
-async function pullTimersFromSupabase(): Promise<void> {
+export async function pullTimersFromSupabase(): Promise<void> {
   // Skip if we recently pushed (prevents reading stale data during async DELETE+INSERT)
   if (Date.now() < _suppressUntil) return;
 

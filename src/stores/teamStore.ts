@@ -13,6 +13,7 @@ import {
   encryptTeamKeyWithPersonalKey,
   decryptTeamKeyWithPersonalKey,
   setTeamKey,
+  getTeamKeyB64,
   clearTeamKey,
   hasTeamKey,
 } from '@/lib/crypto';
@@ -442,14 +443,35 @@ export const useTeamStore = create<TeamState>((set, get) => ({
         const teamId = membershipData[0].team_id;
 
         // Restore Team Key from personal-key-encrypted copy (if not already in session)
-        if (!hasTeamKey() && membershipData[0].encrypted_team_key && hasEncryptionKey()) {
+        if (!hasTeamKey() && hasEncryptionKey()) {
+          if (membershipData[0].encrypted_team_key) {
+            try {
+              const teamKeyB64 = await decryptTeamKeyWithPersonalKey(
+                membershipData[0].encrypted_team_key
+              );
+              setTeamKey(teamKeyB64);
+              console.info('[Team E2E] Team Key restored from personal-encrypted copy');
+            } catch (e) {
+              console.warn('[Team E2E] Could not restore Team Key from personal copy:', e);
+            }
+          } else {
+            console.warn('[Team E2E] No encrypted_team_key on team_members row — Team Key unavailable. User must re-join with invite code to restore.');
+          }
+        }
+
+        // If Team Key is in session but NOT persisted to team_members row, save it now
+        // (handles case where user joined on device A and opens device B for the first time)
+        if (hasTeamKey() && hasEncryptionKey() && !membershipData[0].encrypted_team_key) {
           try {
-            const teamKeyB64 = await decryptTeamKeyWithPersonalKey(
-              membershipData[0].encrypted_team_key
-            );
-            setTeamKey(teamKeyB64);
+            const personalEncrypted = await encryptTeamKeyWithPersonalKey(getTeamKeyB64()!);
+            await supabaseClient
+              .from('team_members')
+              .update({ encrypted_team_key: personalEncrypted })
+              .eq('team_id', teamId)
+              .eq('user_id', profile.id);
+            console.info('[Team E2E] Persisted Team Key to team_members row');
           } catch (e) {
-            console.warn('[Team E2E] Could not restore Team Key:', e);
+            // Non-critical — will retry next sync
           }
         }
 

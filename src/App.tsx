@@ -1,10 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useUiStore } from '@/stores/uiStore'
-import { useEntriesStore } from '@/stores/entriesStore'
-import { useMasterStore } from '@/stores/masterStore'
+import { useEntriesStore, pullEntriesFromSupabase } from '@/stores/entriesStore'
+import { useMasterStore, pullMasterDataFromSupabase } from '@/stores/masterStore'
 import { useTeamStore } from '@/stores/teamStore'
-import { useTimerStore, subscribeToTimerSync, unsubscribeFromTimerSync } from '@/stores/timerStore'
+import { useTimerStore, subscribeToTimerSync, unsubscribeFromTimerSync, pullTimersFromSupabase } from '@/stores/timerStore'
 import { subscribeToMasterSync, unsubscribeFromMasterSync } from '@/stores/masterStore'
 import { subscribeToEntriesSync, unsubscribeFromEntriesSync } from '@/stores/entriesStore'
 import { subscribeToTeamSync, unsubscribeFromTeamSync } from '@/stores/teamStore'
@@ -33,29 +33,26 @@ function AppContent() {
   // fetching entries/master data. Otherwise decryptFieldSmart fails because
   // the Team Key isn't in sessionStorage yet, causing all encrypted text
   // fields (stakeholder, projekt, etc.) to decrypt as empty strings.
+  // Full data load: team key → entries + master data + timers
+  const loadAllData = useCallback(async () => {
+    try {
+      // Step 1: Restore team key first (fast — single row query)
+      await syncTeam()
+      subscribeToTeamSync()
+    } catch {
+      // Team sync failed (offline?) — continue with personal key
+    }
+    // Step 2: Now safe to decrypt — fetch entries & master data
+    fetchEntries().then(() => subscribeToEntriesSync())
+    fetchMaster()
+    subscribeToMasterSync()
+    // Timers don't contain encrypted text fields, safe to start in parallel
+    restoreTimers().then(() => subscribeToTimerSync())
+  }, [syncTeam, fetchEntries, fetchMaster, restoreTimers])
+
   useEffect(() => {
     if (isAuthenticated && !needsPassword) {
-      // Step 1: Restore team key first (fast — single row query)
-      syncTeam().then(() => {
-        subscribeToTeamSync()
-        // Step 2: Now safe to decrypt — fetch entries & master data
-        fetchEntries().then(() => {
-          subscribeToEntriesSync()
-        })
-        fetchMaster()
-        subscribeToMasterSync()
-      }).catch(() => {
-        // Team sync failed (offline?) — still load data with personal key
-        fetchEntries().then(() => {
-          subscribeToEntriesSync()
-        })
-        fetchMaster()
-        subscribeToMasterSync()
-      })
-      // Timers don't contain encrypted text fields, safe to start in parallel
-      restoreTimers().then(() => {
-        subscribeToTimerSync()
-      })
+      loadAllData()
     }
 
     return () => {
@@ -64,7 +61,38 @@ function AppContent() {
       unsubscribeFromEntriesSync()
       unsubscribeFromTeamSync()
     }
-  }, [isAuthenticated, needsPassword, fetchEntries, fetchMaster, syncTeam, restoreTimers])
+  }, [isAuthenticated, needsPassword, loadAllData])
+
+  // Re-sync when app becomes visible (mobile background → foreground, tab switch)
+  // Browsers pause WebSocket connections and throttle setInterval in background tabs.
+  // Without this, the app shows stale data after returning from background.
+  const lastVisibilitySync = useRef(0)
+  useEffect(() => {
+    if (!isAuthenticated || needsPassword) return
+
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'visible') return
+      // Throttle: at most once per 5 seconds
+      const now = Date.now()
+      if (now - lastVisibilitySync.current < 5000) return
+      lastVisibilitySync.current = now
+
+      // Re-sync team key first, then pull fresh data
+      syncTeam().then(() => {
+        pullEntriesFromSupabase()
+        pullMasterDataFromSupabase()
+        pullTimersFromSupabase()
+      }).catch(() => {
+        // Team sync failed — still try to pull with existing keys
+        pullEntriesFromSupabase()
+        pullMasterDataFromSupabase()
+        pullTimersFromSupabase()
+      })
+    }
+
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [isAuthenticated, needsPassword, syncTeam])
 
   useEffect(() => {
     const html = document.documentElement

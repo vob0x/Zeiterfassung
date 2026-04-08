@@ -519,7 +519,7 @@ function getMasterFingerprint(sh: string[], pr: string[], ac: string[], fm: stri
   return [sh.join(','), pr.join(','), ac.join(','), fm.join(',')].join('|');
 }
 
-async function pullMasterDataFromSupabase(): Promise<void> {
+export async function pullMasterDataFromSupabase(): Promise<void> {
   if (Date.now() < _masterSuppressUntil) return;
 
   const userId = getSupabaseUserId();
