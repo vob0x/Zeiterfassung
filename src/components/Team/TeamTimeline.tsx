@@ -14,10 +14,10 @@ const MEMBER_COLORS = [
   '#6EC49E', // sage green (--success)
   '#9B8EC4', // soft violet (--neon-violet)
   '#D4706E', // muted coral (--danger)
-  '#E5A84B', // warm amber (--warning)
   '#5BA4D9', // soft steel blue
   '#D4956A', // warm terracotta
   '#C48B9F', // dusty rose
+  '#4ECDC4', // teal
 ];
 
 export function TeamTimeline({ memberEntries, members }: TeamTimelineProps) {
