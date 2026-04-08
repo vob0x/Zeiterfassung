@@ -68,13 +68,33 @@ async function encryptEntryForSupabase(row: Record<string, any>): Promise<Record
   return encrypted;
 }
 
+// Track decryption stats across a batch (reset before each fetch)
+let _batchDecryptOk = 0;
+let _batchDecryptFail = 0;
+let _batchDecryptSkip = 0;
+
+export function resetDecryptStats(): void {
+  _batchDecryptOk = 0;
+  _batchDecryptFail = 0;
+  _batchDecryptSkip = 0;
+}
+
+export function logDecryptStats(): void {
+  console.info(`[Entries Diag] Decryption results: ok=${_batchDecryptOk}, failed=${_batchDecryptFail}, skipped(empty)=${_batchDecryptSkip}`);
+}
+
 export async function decryptEntryFromSupabase(row: any): Promise<any> {
   const decrypted = { ...row };
   for (const field of ENCRYPTED_ENTRY_FIELDS) {
     if (decrypted[field]) {
+      const raw = decrypted[field];
       // Use decryptFieldSmart: tries Team Key first, then personal key
-      // This handles entries encrypted with either key
-      const decryptedValue = await decryptFieldSmart(decrypted[field]);
+      const decryptedValue = await decryptFieldSmart(raw);
+      // Track success/failure
+      if (typeof raw === 'string' && raw.startsWith('enc:')) {
+        if (decryptedValue && decryptedValue !== '') _batchDecryptOk++;
+        else _batchDecryptFail++;
+      }
       // For stakeholder, parse JSON array if it was serialized
       if (field === 'stakeholder' && decryptedValue && decryptedValue.startsWith('[')) {
         try {
@@ -85,6 +105,8 @@ export async function decryptEntryFromSupabase(row: any): Promise<any> {
       } else {
         decrypted[field] = decryptedValue;
       }
+    } else {
+      _batchDecryptSkip++;
     }
   }
   return decrypted;
@@ -168,7 +190,41 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
         }
         if (!sbErr && data) {
           console.info(`[Entries] Supabase returned ${data.length} entries`);
+
+          // ── Diagnostic: analyze raw encryption state of Supabase entries ──
+          let encCount = 0, plainCount = 0, emptyCount = 0;
+          const sampleEnc: string[] = [];
+          const samplePlain: string[] = [];
+          for (const row of data.slice(0, 50)) {
+            for (const f of ['stakeholder', 'projekt', 'taetigkeit'] as const) {
+              const val = row[f];
+              if (!val || val === '') emptyCount++;
+              else if (typeof val === 'string' && val.startsWith('enc:')) { encCount++; if (sampleEnc.length < 3) sampleEnc.push(`${row.date}|${f}=${val.slice(0, 40)}…`); }
+              else { plainCount++; if (samplePlain.length < 3) samplePlain.push(`${row.date}|${f}=${val.slice(0, 40)}`); }
+            }
+          }
+          console.info(`[Entries Diag] First 50 entries (newest first) — encrypted=${encCount}, plaintext=${plainCount}, empty=${emptyCount}`);
+          if (sampleEnc.length > 0) console.info(`[Entries Diag] Encrypted samples:`, sampleEnc);
+          if (samplePlain.length > 0) console.info(`[Entries Diag] Plaintext samples:`, samplePlain);
+
+          // Also check a few OLD entries (at the end of the array)
+          if (data.length > 50) {
+            let oldEnc = 0, oldPlain = 0, oldEmpty = 0;
+            const oldSamples: string[] = [];
+            for (const row of data.slice(-20)) {
+              for (const f of ['stakeholder', 'projekt', 'taetigkeit'] as const) {
+                const val = row[f];
+                if (!val || val === '') oldEmpty++;
+                else if (typeof val === 'string' && val.startsWith('enc:')) { oldEnc++; if (oldSamples.length < 3) oldSamples.push(`${row.date}|${f}=${val.slice(0, 40)}…`); }
+                else oldPlain++;
+              }
+            }
+            console.info(`[Entries Diag] Last 20 entries (oldest) — encrypted=${oldEnc}, plaintext=${oldPlain}, empty=${oldEmpty}`);
+            if (oldSamples.length > 0) console.info(`[Entries Diag] Old encrypted samples:`, oldSamples);
+          }
+
           // Decrypt entries from Supabase
+          resetDecryptStats();
           const sbEntries: TimeEntry[] = await Promise.all(
             data.map(async (row: any) => {
               const decrypted = await decryptEntryFromSupabase(row);
@@ -194,6 +250,9 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
               };
             })
           );
+
+          // Log decryption statistics
+          logDecryptStats();
 
           // Supabase responded successfully — it is the source of truth.
           // Deduplicate by ID (in case Supabase has duplicate rows)
