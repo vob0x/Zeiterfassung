@@ -23,7 +23,7 @@ export function exportBackup(
   entries: TimeEntry[]
 ): BackupData {
   return {
-    version: '6.0',
+    version: '1.0',
     timestamp: new Date().toISOString(),
     masterData: {
       stakeholders: masterData.stakeholders,

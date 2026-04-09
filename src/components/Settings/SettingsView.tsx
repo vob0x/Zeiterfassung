@@ -154,7 +154,7 @@ export function SettingsView() {
 
         <div className="space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
           <p>
-            <strong>{t('app.title')}</strong> V6.0
+            <strong>{t('app.title')}</strong> V1.0
           </p>
           <p>{t('settings.appDesc')}</p>
           <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>© 2024. {t('settings.copyright')}</p>
