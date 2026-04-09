@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Zeiterfassung V1.0 User Manual - Complete guide for time tracking application">
+    <title>Zeiterfassung V1.0 User Manual</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ===== ROOT & THEME VARIABLES ===== */
+        :root {
+            --color-primary: #c9a962;
+            --color-secondary: #00e5ff;
+            --color-accent-green: #6ec49e;
+            --color-accent-red: #e85d5d;
+            --dark-bg: #0f1419;
+            --dark-surface: #1a1f26;
+            --dark-border: #2a3139;
+            --dark-text: #e8eaed;
+            --dark-text-secondary: #a8adb5;
+            --light-bg: #ffffff;
+            --light-surface: #f5f5f5;
+            --light-border: #e0e0e0;
+            --light-text: #1a1a1a;
+            --light-text-secondary: #666666;
+            --font-display: 'Playfair Display', serif;
+            --font-body: 'Inter', sans-serif;
+            --spacing-xs: 0.25rem;
+            --spacing-sm: 0.5rem;
+            --spacing-md: 1rem;
+            --spacing-lg: 1.5rem;
+            --spacing-xl: 2rem;
+            --spacing-2xl: 3rem;
+            --radius-sm: 0.375rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+        }
+
+        body.cyber {
+            --bg: var(--dark-bg);
+            --surface: var(--dark-surface);
+            --border: var(--dark-border);
+            --text: var(--dark-text);
+            --text-secondary: var(--dark-text-secondary);
+        }
+
+        body.light {
+            --bg: var(--light-bg);
+            --surface: var(--light-surface);
+            --border: var(--light-border);
+            --text: var(--light-text);
+            --text-secondary: var(--light-text-secondary);
+        }
+
+        body.lang-de [lang="fr"] { display: none; }
+        body.lang-fr [lang="de"] { display: none; }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background-color: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: var(--spacing-md) var(--spacing-lg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: var(--spacing-lg);
+        }
+
+        .header-title {
+            font-family: var(--font-display);
+            font-size: 1.75rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-version {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: var(--spacing-md);
+            align-items: center;
+        }
+
+        .theme-toggle, .lang-toggle {
+            background-color: var(--border);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-family: var(--font-body);
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .theme-toggle:hover, .lang-toggle:hover {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+        }
+
+        .sidebar {
+            width: 280px;
+            background-color: var(--surface);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            padding: var(--spacing-lg) 0;
+        }
+
+        .sidebar-section {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .sidebar-section-title {
+            padding: 0 var(--spacing-lg);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .sidebar-nav {
+            list-style: none;
+        }
+
+        .sidebar-nav li {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-nav a {
+            padding: var(--spacing-sm) var(--spacing-lg);
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+            text-align: left;
+            font-family: var(--font-body);
+        }
+
+        .sidebar-nav a:hover {
+            background-color: var(--border);
+            color: var(--color-primary);
+        }
+
+        .sidebar-nav a.active {
+            border-left-color: var(--color-primary);
+            background-color: rgba(201, 169, 98, 0.1);
+            color: var(--color-primary);
+            font-weight: 600;
+        }
+
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-2xl) var(--spacing-2xl);
+        }
+
+        .chapter {
+            display: none;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .chapter.active {
+            display: block;
+        }
+
+        .chapter-title {
+            font-family: var(--font-display);
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: var(--spacing-md);
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .chapter-subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-2xl);
+            font-weight: 500;
+        }
+
+        h2 {
+            font-family: var(--font-display);
+            font-size: 1.75rem;
+            margin-top: var(--spacing-2xl);
+            margin-bottom: var(--spacing-lg);
+            color: var(--text);
+        }
+
+        h2:first-of-type {
+            margin-top: 0;
+        }
+
+        h3 {
+            font-family: var(--font-display);
+            font-size: 1.35rem;
+            margin-top: var(--spacing-xl);
+            margin-bottom: var(--spacing-md);
+            color: var(--text);
+        }
+
+        h4 {
+            font-size: 1.1rem;
+            margin-top: var(--spacing-lg);
+            margin-bottom: var(--spacing-md);
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        p {
+            margin-bottom: var(--spacing-md);
+            color: var(--text);
+            line-height: 1.8;
+        }
+
+        p:last-child {
+            margin-bottom: 0;
+        }
+
+        ul, ol {
+            margin-left: var(--spacing-lg);
+            margin-bottom: var(--spacing-md);
+        }
+
+        li {
+            margin-bottom: var(--spacing-sm);
+            color: var(--text);
+        }
+
+        code {
+            font-family: 'Monaco', 'Menlo', monospace;
+            background-color: var(--border);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            color: var(--color-secondary);
+        }
+
+        .box-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+            margin: var(--spacing-lg) 0;
+        }
+
+        .tip-box, .warn-box, .info-box {
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-lg);
+            border-left: 4px solid;
+            background-color: var(--surface);
+        }
+
+        .tip-box {
+            border-left-color: var(--color-accent-green);
+            background-color: rgba(110, 196, 158, 0.1);
+        }
+
+        .tip-box::before {
+            content: "💡 ";
+            font-size: 1.2rem;
+            margin-right: var(--spacing-sm);
+        }
+
+        .warn-box {
+            border-left-color: var(--color-accent-red);
+            background-color: rgba(232, 93, 93, 0.1);
+        }
+
+        .warn-box::before {
+            content: "⚠️ ";
+            font-size: 1.2rem;
+            margin-right: var(--spacing-sm);
+        }
+
+        .info-box {
+            border-left-color: var(--color-secondary);
+            background-color: rgba(0, 229, 255, 0.1);
+        }
+
+        .info-box::before {
+            content: "ℹ️ ";
+            font-size: 1.2rem;
+            margin-right: var(--spacing-sm);
+        }
+
+        kbd {
+            display: inline-block;
+            background-color: var(--border);
+            border: 1px solid var(--text-secondary);
+            border-radius: var(--radius-sm);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--color-secondary);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--spacing-lg);
+            margin: var(--spacing-lg) 0;
+        }
+
+        .feature-card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            border-color: var(--color-primary);
+            box-shadow: 0 8px 16px rgba(201, 169, 98, 0.1);
+        }
+
+        .feature-card h4 {
+            color: var(--color-primary);
+            margin-top: 0;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .mockup-container {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            margin: var(--spacing-lg) 0;
+            overflow-x: auto;
+        }
+
+        .mockup-title {
+            font-weight: 600;
+            color: var(--color-primary);
+            margin-bottom: var(--spacing-md);
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .login-form {
+            background-color: #0a0e13;
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            max-width: 320px;
+            margin: 0 auto;
+        }
+
+        .login-form h3 {
+            text-align: center;
+            margin-top: 0;
+            color: var(--text);
+        }
+
+        .form-group {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: var(--spacing-sm);
+            color: var(--text);
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: var(--spacing-md);
+            background-color: var(--border);
+            border: 1px solid var(--color-secondary);
+            border-radius: var(--radius-md);
+            color: var(--text);
+            font-family: var(--font-body);
+            font-size: 0.95rem;
+        }
+
+        .btn-primary, .btn-secondary {
+            width: 100%;
+            padding: var(--spacing-md);
+            border: none;
+            border-radius: var(--radius-md);
+            font-family: var(--font-body);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        .btn-primary {
+            background-color: var(--color-primary);
+            color: #0a0e13;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .btn-primary:hover {
+            background-color: #d4b876;
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            border: 1px solid var(--color-secondary);
+            color: var(--color-secondary);
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(0, 229, 255, 0.1);
+        }
+
+        .login-link {
+            text-align: center;
+            font-size: 0.9rem;
+            margin-top: var(--spacing-md);
+            color: var(--text-secondary);
+        }
+
+        .login-link a {
+            color: var(--color-secondary);
+            text-decoration: none;
+        }
+
+        .login-link a:hover {
+            text-decoration: underline;
+        }
+
+        .timer-view {
+            background-color: var(--surface);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+        }
+
+        .timer-slot {
+            background-color: var(--border);
+            border: 1px solid var(--color-secondary);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .timer-slot-header {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .timer-field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .timer-field label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-xs);
+            font-weight: 500;
+        }
+
+        .timer-field select {
+            padding: var(--spacing-sm);
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            font-family: var(--font-body);
+        }
+
+        .timer-display {
+            font-family: 'Monaco', monospace;
+            font-size: 2.5rem;
+            font-weight: 700;
+            text-align: center;
+            color: var(--color-secondary);
+            margin: var(--spacing-lg) 0;
+            letter-spacing: 0.05em;
+        }
+
+        .timer-controls {
+            display: flex;
+            gap: var(--spacing-md);
+            justify-content: center;
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .timer-btn {
+            padding: var(--spacing-md) var(--spacing-lg);
+            border: none;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        .timer-btn-start {
+            background-color: var(--color-accent-green);
+            color: #0a0e13;
+        }
+
+        .timer-btn-start:hover {
+            opacity: 0.9;
+        }
+
+        .timer-btn-save {
+            background-color: var(--color-primary);
+            color: #0a0e13;
+        }
+
+        .timer-btn-save:hover {
+            opacity: 0.9;
+        }
+
+        .dayring {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            border: 3px solid var(--color-secondary);
+            background: conic-gradient(var(--color-accent-green) 0deg 270deg, var(--color-primary) 270deg 360deg);
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .dayring-text {
+            font-size: 0.85rem;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        .entries-table-wrapper {
+            background-color: var(--surface);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            margin: var(--spacing-lg) 0;
+        }
+
+        .filter-bar {
+            background-color: var(--border);
+            padding: var(--spacing-md);
+            display: flex;
+            gap: var(--spacing-md);
+            flex-wrap: wrap;
+        }
+
+        .filter-input {
+            padding: var(--spacing-sm) var(--spacing-md);
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            font-family: var(--font-body);
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+        th {
+            background-color: var(--border);
+            color: var(--text);
+            padding: var(--spacing-md);
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--color-primary);
+        }
+
+        td {
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        tr:hover {
+            background-color: rgba(201, 169, 98, 0.05);
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--spacing-lg);
+            margin: var(--spacing-lg) 0;
+        }
+
+        .kpi-card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            text-align: center;
+        }
+
+        .kpi-card h4 {
+            color: var(--text-secondary);
+            margin: 0 0 var(--spacing-md) 0;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .kpi-value {
+            font-family: 'Monaco', monospace;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--color-primary);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .kpi-unit {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .invite-box {
+            background-color: var(--border);
+            border: 2px dashed var(--color-secondary);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            text-align: center;
+            margin: var(--spacing-lg) 0;
+        }
+
+        .invite-code {
+            font-family: 'Monaco', monospace;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--color-secondary);
+            margin: var(--spacing-md) 0;
+            letter-spacing: 0.2em;
+        }
+
+        .qr-placeholder {
+            width: 150px;
+            height: 150px;
+            background-color: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            margin: var(--spacing-lg) auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            font-size: 0.9rem;
+            text-align: center;
+            padding: var(--spacing-md);
+        }
+
+        .member-list {
+            background-color: var(--surface);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .member-item {
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .member-item:last-child {
+            border-bottom: none;
+        }
+
+        .member-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #0a0e13;
+            margin-right: var(--spacing-md);
+        }
+
+        .member-info {
+            flex: 1;
+        }
+
+        .member-name {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .member-role {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .step-container {
+            display: flex;
+            gap: var(--spacing-lg);
+            margin: var(--spacing-lg) 0;
+        }
+
+        .step-number {
+            flex-shrink: 0;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #0a0e13;
+            font-size: 1.1rem;
+        }
+
+        .step-content {
+            flex: 1;
+            padding-top: var(--spacing-sm);
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            margin: var(--spacing-lg) 0;
+        }
+
+        .shortcut-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+        .shortcut-table th {
+            background-color: var(--border);
+            color: var(--text);
+            padding: var(--spacing-md);
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--color-primary);
+        }
+
+        .shortcut-table td {
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .shortcut-table tr:hover {
+            background-color: rgba(201, 169, 98, 0.05);
+        }
+
+        .shortcut-table kbd {
+            display: inline-block;
+        }
+
+        .glossary-term {
+            margin-bottom: var(--spacing-lg);
+            border-left: 3px solid var(--color-primary);
+            padding-left: var(--spacing-lg);
+        }
+
+        .glossary-term dt {
+            font-weight: 700;
+            color: var(--color-primary);
+            font-size: 1.05rem;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .glossary-term dd {
+            margin: 0;
+            color: var(--text);
+            line-height: 1.8;
+        }
+
+        @media (max-width: 900px) {
+            .sidebar {
+                display: none;
+            }
+
+            .header {
+                flex-wrap: wrap;
+                gap: var(--spacing-sm);
+            }
+
+            .header-title {
+                font-size: 1.35rem;
+            }
+
+            .chapter-title {
+                font-size: 1.75rem;
+            }
+
+            h2 {
+                font-size: 1.35rem;
+            }
+
+            h3 {
+                font-size: 1.1rem;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .timer-slot-header {
+                grid-template-columns: 1fr;
+            }
+
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .main-content {
+                padding: var(--spacing-lg);
+            }
+        }
+
+        @media print {
+            .header, .sidebar, .header-controls {
+                display: none;
+            }
+
+            .main-content {
+                padding: 0;
+            }
+
+            .chapter {
+                page-break-after: always;
+            }
+
+            h1, h2, h3 {
+                page-break-after: avoid;
+            }
+
+            .feature-card, .tip-box, .warn-box {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body class="cyber lang-de">
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-section-title" lang="de">Kapitel</div>
+                <div class="sidebar-section-title" lang="fr">Chapitres</div>
+                <ul class="sidebar-nav">
+                    <li><a href="#" data-chapter="ch1" class="nav-link active" lang="de">Überblick & Systemanforderungen</a>
+                        <a href="#" data-chapter="ch1" class="nav-link active" lang="fr">Aperçu & Système</a></li>
+                    <li><a href="#" data-chapter="ch2" class="nav-link" lang="de">Erststart & Anmeldung</a>
+                        <a href="#" data-chapter="ch2" class="nav-link" lang="fr">Démarrage & Connexion</a></li>
+                    <li><a href="#" data-chapter="ch3" class="nav-link" lang="de">Timer & Task-Slots</a>
+                        <a href="#" data-chapter="ch3" class="nav-link" lang="fr">Minuteur & Emplacements</a></li>
+                    <li><a href="#" data-chapter="ch3-1" class="nav-link" lang="de">↳ Mehrere Timer (Stack)</a>
+                        <a href="#" data-chapter="ch3-1" class="nav-link" lang="fr">↳ Plusieurs Minuteurs</a></li>
+                    <li><a href="#" data-chapter="ch3-2" class="nav-link" lang="de">↳ Fuzzy-Suche & Shortcuts</a>
+                        <a href="#" data-chapter="ch3-2" class="nav-link" lang="fr">↳ Recherche Fuzzy</a></li>
+                    <li><a href="#" data-chapter="ch3-3" class="nav-link" lang="de">↳ Manueller Eintrag</a>
+                        <a href="#" data-chapter="ch3-3" class="nav-link" lang="fr">↳ Entrée Manuelle</a></li>
+                    <li><a href="#" data-chapter="ch4" class="nav-link" lang="de">Einträge & Filterung</a>
+                        <a href="#" data-chapter="ch4" class="nav-link" lang="fr">Entrées & Filtrage</a></li>
+                    <li><a href="#" data-chapter="ch5" class="nav-link" lang="de">Dashboard</a>
+                        <a href="#" data-chapter="ch5" class="nav-link" lang="fr">Tableaux de Bord</a></li>
+                    <li><a href="#" data-chapter="ch6" class="nav-link" lang="de">Verwaltung & Daten</a>
+                        <a href="#" data-chapter="ch6" class="nav-link" lang="fr">Gestion & Données</a></li>
+                    <li><a href="#" data-chapter="ch7" class="nav-link" lang="de">Team-Dashboard</a>
+                        <a href="#" data-chapter="ch7" class="nav-link" lang="fr">Tableau d'équipe</a></li>
+                    <li><a href="#" data-chapter="ch7-1" class="nav-link" lang="de">↳ Team erstellen/beitreten</a>
+                        <a href="#" data-chapter="ch7-1" class="nav-link" lang="fr">↳ Créer/Rejoindre Équipe</a></li>
+                    <li><a href="#" data-chapter="ch7-2" class="nav-link" lang="de">↳ Team-Ansichten</a>
+                        <a href="#" data-chapter="ch7-2" class="nav-link" lang="fr">↳ Vues d'équipe</a></li>
+                    <li><a href="#" data-chapter="ch8" class="nav-link" lang="de">Backup & Sicherheit</a>
+                        <a href="#" data-chapter="ch8" class="nav-link" lang="fr">Sauvegarde & Sécurité</a></li>
+                    <li><a href="#" data-chapter="ch9" class="nav-link" lang="de">Einstellungen</a>
+                        <a href="#" data-chapter="ch9" class="nav-link" lang="fr">Paramètres</a></li>
+                    <li><a href="#" data-chapter="ch10" class="nav-link" lang="de">Tastenkürzel</a>
+                        <a href="#" data-chapter="ch10" class="nav-link" lang="fr">Raccourcis Clavier</a></li>
+                    <li><a href="#" data-chapter="ch11" class="nav-link" lang="de">Barrierefreiheit</a>
+                        <a href="#" data-chapter="ch11" class="nav-link" lang="fr">Accessibilité</a></li>
+                    <li><a href="#" data-chapter="ch12" class="nav-link" lang="de">Fehlerbehebung</a>
+                        <a href="#" data-chapter="ch12" class="nav-link" lang="fr">Dépannage</a></li>
+                    <li><a href="#" data-chapter="ch13" class="nav-link" lang="de">Glossar</a>
+                        <a href="#" data-chapter="ch13" class="nav-link" lang="fr">Glossaire</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <div style="flex: 1; display: flex; flex-direction: column;">
+            <header class="header">
+                <div>
+                    <h1 class="header-title" lang="de">Zeiterfassung</h1>
+                    <h1 class="header-title" lang="fr">Enregistrement du Temps</h1>
+                    <span class="header-version">V1.0 · April 2026</span>
+                </div>
+                <div class="header-controls">
+                    <button class="theme-toggle" id="themeBtn">🌙 Cyber</button>
+                    <button class="lang-toggle" id="langBtn">🌐 DE / FR</button>
+                </div>
+            </header>
+
+            <main class="main-content">
+
+                <!-- CHAPTER 1 -->
+                <article id="ch1" class="chapter active">
+                    <h1 class="chapter-title" lang="de">Überblick & Systemanforderungen</h1>
+                    <h1 class="chapter-title" lang="fr">Aperçu & Configuration Requise</h1>
+                    <p class="chapter-subtitle" lang="de">Architektur, Browser-Anforderungen und PWA-Installation</p>
+                    <p class="chapter-subtitle" lang="fr">Architecture, configurations de navigateur et installation PWA</p>
+
+                    <h2 lang="de">Was ist Zeiterfassung?</h2>
+                    <h2 lang="fr">Qu'est-ce que Zeiterfassung?</h2>
+                    <p lang="de">
+                        Zeiterfassung ist eine moderne <strong>Progressive Web App (PWA)</strong> für präzise,
+                        verschlüsselte Zeitleistung. Sie können Aktivitäten nach Stakeholder, Projekt, Tätigkeit
+                        und Format kategorisieren, mehrere Timer parallel laufen lassen und Ihr Team in Echtzeit
+                        überwachen — all mit <strong>vollständiger End-to-End-Verschlüsselung (AES-GCM)</strong>
+                        auf der Clientseite.
+                    </p>
+                    <p lang="fr">
+                        Zeiterfassung est une <strong>Progressive Web App (PWA)</strong> moderne pour l'enregistrement
+                        du temps précis et chiffré. Vous pouvez catégoriser les activités par partie prenante,
+                        projet, activité et format, exécuter plusieurs minuteurs en parallèle et surveiller votre
+                        équipe en temps réel — avec <strong>chiffrement de bout en bout (AES-GCM)</strong> complet
+                        côté client.
+                    </p>
+
+                    <h2 lang="de">Technische Architektur</h2>
+                    <h2 lang="fr">Architecture technique</h2>
+                    <div class="box-container">
+                        <div class="info-box">
+                            <strong lang="de">Frontend:</strong><span lang="de"> React + TypeScript (vite)</span><br>
+                            <strong lang="de">Backend:</strong><span lang="de"> Supabase PostgreSQL + Auth</span><br>
+                            <strong lang="de">Verschlüsselung:</strong><span lang="de"> Web Crypto API (AES-256-GCM)</span><br>
+                            <strong lang="de">Storage:</strong><span lang="de"> sessionStorage (Schlüssel), Supabase (verschlüsselt)</span>
+                        </div>
+                    </div>
+
+                    <h2 lang="de">Systemanforderungen</h2>
+                    <h2 lang="fr">Configuration requise</h2>
+                    <h3 lang="de">Browser-Unterstützung</h3>
+                    <h3 lang="fr">Support du navigateur</h3>
+                    <ul lang="de">
+                        <li><strong>Chrome/Edge:</strong> 90+</li>
+                        <li><strong>Firefox:</strong> 88+</li>
+                        <li><strong>Safari:</strong> 14+</li>
+                        <li><strong>Mobile:</strong> iOS Safari 14+, Android Chrome 90+</li>
+                    </ul>
+
+                    <div class="tip-box" lang="de">
+                        <strong>PWA-Vorteile:</strong> Keine Installation erforderlich, funktioniert offline,
+                        Push-Benachrichtigungen, schnelle Ladezeiten, funktioniert auf mobilen Geräten wie eine native App
+                    </div>
+                </article>
+
+                <!-- CHAPTER 2 -->
+                <article id="ch2" class="chapter">
+                    <h1 class="chapter-title" lang="de">Erststart & Anmeldung</h1>
+                    <h1 class="chapter-title" lang="fr">Démarrage & Connexion</h1>
+                    <p class="chapter-subtitle" lang="de">Registrierung, Anmeldung und UnlockScreen</p>
+                    <p class="chapter-subtitle" lang="fr">Enregistrement, connexion et écran de déverrouillage</p>
+
+                    <h2 lang="de">App öffnen und registrieren</h2>
+                    <h2 lang="fr">Ouvrir l'application et s'enregistrer</h2>
+                    <p lang="de">
+                        Wenn Sie Zeiterfassung zum ersten Mal öffnen, sehen Sie einen Registrierungsbildschirm.
+                        Sie müssen einen <strong>Codename</strong> (Benutzer-ID) und ein <strong>Passwort</strong> wählen.
+                    </p>
+
+                    <div class="step-container">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <strong lang="de">URL öffnen:</strong> <code>vob0x.github.io/Zeiterfassung</code>
+                        </div>
+                    </div>
+
+                    <div class="step-container">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <strong lang="de">Codename eingeben:</strong><br>
+                            <span lang="de">Wählen Sie einen eindeutigen, leicht zu merkenden Namen (z. B. <code>john.doe</code>)</span>
+                        </div>
+                    </div>
+
+                    <!-- LOGIN MOCKUP -->
+                    <div class="mockup-container">
+                        <div class="mockup-title" lang="de">Anmeldungsbildschirm</div>
+                        <div class="login-form" style="margin: var(--spacing-lg) auto;">
+                            <h3 lang="de">Registrieren</h3>
+                            <div class="form-group">
+                                <label class="form-label" lang="de">Codename</label>
+                                <input type="text" class="form-input" placeholder="john.doe" readonly style="opacity: 0.7;">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" lang="de">Passwort</label>
+                                <input type="password" class="form-input" placeholder="••••••••" readonly style="opacity: 0.7;">
+                            </div>
+                            <button class="btn-primary" disabled style="opacity: 0.6;" lang="de">Registrieren</button>
+                        </div>
+                    </div>
+
+                    <div class="warn-box" lang="de">
+                        <strong>Sicherheitshinweis:</strong> Ihr Passwort wird <strong>niemals</strong> an den Server übertragen.
+                        Es wird nur lokal zur Ableitung Ihres Verschlüsselungsschlüssels verwendet.
+                    </div>
+                </article>
+
+                <!-- CHAPTER 3 -->
+                <article id="ch3" class="chapter">
+                    <h1 class="chapter-title" lang="de">Timer & Task-Slots</h1>
+                    <h1 class="chapter-title" lang="fr">Minuteur & Emplacements de Tâche</h1>
+                    <p class="chapter-subtitle" lang="de">Aktivitäten erfassen, Timer starten, Multiple Parallel Timers</p>
+
+                    <h2 lang="de">Überblick: Die fünf Datendimensionen</h2>
+                    <p lang="de">
+                        Jeder Zeiteintrag wird durch <strong>fünf Dimensionen</strong> beschrieben:
+                    </p>
+
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h4 lang="de">Stakeholder</h4>
+                            <p lang="de">Wer profitiert? (Multi-Select)</p>
+                        </div>
+                        <div class="feature-card">
+                            <h4 lang="de">Projekt</h4>
+                            <p lang="de">Welches Projekt? (Single-Select)</p>
+                        </div>
+                        <div class="feature-card">
+                            <h4 lang="de">Tätigkeit</h4>
+                            <p lang="de">Welche Arbeit? (Single-Select)</p>
+                        </div>
+                        <div class="feature-card">
+                            <h4 lang="de">Format</h4>
+                            <p lang="de">Einzelarbeit, Meeting, Telefonat, Workshop</p>
+                        </div>
+                        <div class="feature-card">
+                            <h4 lang="de">Notiz</h4>
+                            <p lang="de">Kontextuelle Informationen (Optional)</p>
+                        </div>
+                    </div>
+
+                    <h2 lang="de">Timer starten</h2>
+                    <p lang="de">
+                        Im <strong>Timer-Tab</strong> (1. Tab) sehen Sie einen oder mehrere <strong>Task-Slots</strong>.
+                    </p>
+
+                    <!-- TIMER MOCKUP -->
+                    <div class="mockup-container">
+                        <div class="mockup-title" lang="de">Timer-Slot-Beispiel</div>
+                        <div class="timer-view">
+                            <div class="timer-slot">
+                                <div class="timer-slot-header">
+                                    <div class="timer-field">
+                                        <label lang="de">Stakeholder</label>
+                                        <select disabled style="opacity: 0.7;"></select>
+                                    </div>
+                                    <div class="timer-field">
+                                        <label lang="de">Projekt</label>
+                                        <select disabled style="opacity: 0.7;"></select>
+                                    </div>
+                                    <div class="timer-field">
+                                        <label lang="de">Tätigkeit</label>
+                                        <select disabled style="opacity: 0.7;"></select>
+                                    </div>
+                                    <div class="timer-field">
+                                        <label lang="de">Format</label>
+                                        <select disabled style="opacity: 0.7;"></select>
+                                    </div>
+                                </div>
+                                <div class="timer-display">00:15:42</div>
+                                <div class="timer-controls">
+                                    <button class="timer-btn timer-btn-start" disabled style="opacity: 0.6;" lang="de">Pause</button>
+                                    <button class="timer-btn timer-btn-save" disabled style="opacity: 0.6;" lang="de">Speichern</button>
+                                </div>
+                                <div style="text-align: center; margin-top: var(--spacing-lg);">
+                                    <span lang="de">Tagesring (DayRing):</span>
+                                    <div class="dayring" style="width: 140px; height: 140px; margin: var(--spacing-lg) auto;">
+                                        <div class="dayring-text">
+                                            <strong>4h 32m</strong><br>
+                                            <span style="font-size: 0.8rem;">von 8h 24m</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2 lang="de">Keyboard Shortcut: SPACE zum Starten/Pausieren</h2>
+                    <p lang="de">
+                        Drücken Sie <kbd>Space</kbd> um den ersten Timer zu starten/pausieren.
+                    </p>
+                </article>
+
+                <!-- CHAPTER 3.1 -->
+                <article id="ch3-1" class="chapter">
+                    <h1 class="chapter-title" lang="de">3.1 — Mehrere Timer (Stack)</h1>
+                    <p class="chapter-subtitle" lang="de">Bis zu 8 parallele Timers, unabhängig steuern</p>
+
+                    <h2 lang="de">Stack-Timer verwenden</h2>
+                    <p lang="de">
+                        Sie können bis zu <strong>8 Timer gleichzeitig laufen lassen</strong>. Jeder Timer läuft unabhängig.
+                    </p>
+
+                    <ul lang="de">
+                        <li>Jeder Slot hat seine eigenen Dimensionen</li>
+                        <li>Sie können verschiedene Aufgaben gleichzeitig pausieren und fortsetzen</li>
+                        <li>Leere Slots können mit Backspace gelöscht werden</li>
+                    </ul>
+                </article>
+
+                <!-- CHAPTER 3.2 -->
+                <article id="ch3-2" class="chapter">
+                    <h1 class="chapter-title" lang="de">3.2 — Fuzzy-Suche & Quick Shortcuts</h1>
+                    <p class="chapter-subtitle" lang="de">Schnelle Task-Auswahl mit Frecency-Ranking</p>
+
+                    <h2 lang="de">Fuzzy-Suche aktivieren</h2>
+                    <p lang="de">
+                        Die Fuzzy-Suche findet Treffer basierend auf Häufigkeit und Ähnlichkeit.
+                    </p>
+
+                    <div class="tip-box" lang="de">
+                        <strong>Schnelle Starts:</strong> Quick Shortcuts sind perfekt für wiederkehrende Aufgaben.
+                    </div>
+                </article>
+
+                <!-- CHAPTER 3.3 -->
+                <article id="ch3-3" class="chapter">
+                    <h1 class="chapter-title" lang="de">3.3 — Manueller Eintrag</h1>
+                    <p class="chapter-subtitle" lang="de">Zeitblöcke nachtragen</p>
+
+                    <h2 lang="de">Manuellen Eintrag anlegen</h2>
+                    <p lang="de">
+                        Im <strong>Timer-Tab</strong>, unterhalb der aktiven Timer, finden Sie einen
+                        <strong>"Manueller Eintrag"</strong> Abschnitt.
+                    </p>
+
+                    <div class="step-container">
+                        <div class="step-number">1</div>
+                        <div class="step-content"><strong lang="de">Datum wählen</strong></div>
+                    </div>
+                    <div class="step-container">
+                        <div class="step-number">2</div>
+                        <div class="step-content"><strong lang="de">Von/Bis Uhrzeit eingeben (HH:MM Format)</strong></div>
+                    </div>
+
+                    <div class="tip-box" lang="de">
+                        <strong>Keyboard Shortcut N:</strong> Drücken Sie <kbd>N</kbd> um ein Eintrag-Formular zu öffnen.
+                    </div>
+                </article>
+
+                <!-- CHAPTER 4 -->
+                <article id="ch4" class="chapter">
+                    <h1 class="chapter-title" lang="de">Einträge & Filterung</h1>
+                    <p class="chapter-subtitle" lang="de">Einträge durchsuchen, Filterung, Bearbeitung</p>
+
+                    <h2 lang="de">Einträge-Tab öffnen</h2>
+                    <p lang="de">
+                        Der <strong>Einträge-Tab</strong> (2. Tab) zeigt eine Tabelle aller Zeiteinträge.
+                    </p>
+
+                    <!-- ENTRIES TABLE MOCKUP -->
+                    <div class="mockup-container">
+                        <div class="mockup-title" lang="de">Einträge-Tabelle mit Filterbar</div>
+                        <div class="entries-table-wrapper">
+                            <div class="filter-bar">
+                                <input type="text" class="filter-input" placeholder="Datum von..." readonly disabled style="opacity: 0.6;">
+                                <input type="text" class="filter-input" placeholder="Datum bis..." readonly disabled style="opacity: 0.6;">
+                            </div>
+                            <div class="table-responsive">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th lang="de">Datum</th>
+                                            <th lang="de">Stakeholder</th>
+                                            <th lang="de">Projekt</th>
+                                            <th lang="de">Dauer</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>15.04.2026</td>
+                                            <td>Kunde XYZ</td>
+                                            <td>Acme Website</td>
+                                            <td>3h 45m</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tip-box" lang="de">
+                        <strong>Keyboard Shortcut F:</strong> Drücken Sie <kbd>F</kbd> um das Filter-Panel zu öffnen.
+                    </div>
+                </article>
+
+                <!-- CHAPTER 5 -->
+                <article id="ch5" class="chapter">
+                    <h1 class="chapter-title" lang="de">Dashboard</h1>
+                    <p class="chapter-subtitle" lang="de">Datenvisualisierung, Statistiken, Zeitverlauf</p>
+
+                    <h2 lang="de">Dashboard öffnen (3. Tab)</h2>
+                    <p lang="de">
+                        Das <strong>Dashboard</strong> (3. Tab) zeigt eine Übersicht mit verschiedenen Diagrammen und KPI-Karten.
+                    </p>
+
+                    <!-- DASHBOARD MOCKUP -->
+                    <div class="mockup-container">
+                        <div class="mockup-title" lang="de">KPI-Karten (Beispiel)</div>
+                        <div class="kpi-grid">
+                            <div class="kpi-card">
+                                <h4 lang="de">Heute</h4>
+                                <div class="kpi-value">7h 32m</div>
+                                <div class="kpi-unit" lang="de">Gesamtdauer</div>
+                            </div>
+                            <div class="kpi-card">
+                                <h4 lang="de">Diese Periode</h4>
+                                <div class="kpi-value">38h 15m</div>
+                                <div class="kpi-unit" lang="de">Woche</div>
+                            </div>
+                            <div class="kpi-card">
+                                <h4 lang="de">Einträge</h4>
+                                <div class="kpi-value">42</div>
+                                <div class="kpi-unit" lang="de">Zeiteinträge</div>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- CHAPTER 6 -->
+                <article id="ch6" class="chapter">
+                    <h1 class="chapter-title" lang="de">Verwaltung & Daten</h1>
+                    <p class="chapter-subtitle" lang="de">Master Data CRUD, CSV Import/Export, Backup</p>
+
+                    <h2 lang="de">CSV-Spalten</h2>
+                    <div class="table-wrapper">
+                        <table class="shortcut-table">
+                            <thead>
+                                <tr>
+                                    <th lang="de">Spalte</th>
+                                    <th lang="de">Format</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td lang="de">Datum</td>
+                                    <td><code>DD.MM.YYYY</code></td>
+                                </tr>
+                                <tr>
+                                    <td lang="de">Von/Bis</td>
+                                    <td><code>HH:MM</code></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="warn-box" lang="de">
+                        <strong>Warnung:</strong> Mit "Alle Daten löschen" werden <strong>ALLE</strong> Ihre Daten gelöscht.
+                    </div>
+                </article>
+
+                <!-- CHAPTER 7 -->
+                <article id="ch7" class="chapter">
+                    <h1 class="chapter-title" lang="de">Team-Dashboard</h1>
+                    <p class="chapter-subtitle" lang="de">Team anzeigen, Statistiken, Auslastung</p>
+
+                    <h2 lang="de">Team-Tab öffnen (4. Tab)</h2>
+                    <p lang="de">
+                        Der <strong>Team-Tab</strong> (4. Tab) zeigt Daten aller Teammitglieder.
+                    </p>
+                </article>
+
+                <!-- CHAPTER 7.1 -->
+                <article id="ch7-1" class="chapter">
+                    <h1 class="chapter-title" lang="de">7.1 — Team erstellen/beitreten</h1>
+                    <p class="chapter-subtitle" lang="de">Invite-Codes, QR-Codes, Auto-Join URLs</p>
+
+                    <h2 lang="de">Team erstellen (Erstes Mitglied)</h2>
+                    <p lang="de">
+                        Der erste Nutzer ist automatisch der Team-Besitzer.
+                    </p>
+
+                    <!-- TEAM MOCKUP -->
+                    <div class="mockup-container">
+                        <div class="mockup-title" lang="de">Team-Konfiguration</div>
+                        <div style="padding: var(--spacing-lg);">
+                            <div class="invite-box">
+                                <h3 lang="de">Team erstellt!</h3>
+                                <p lang="de">Teilen Sie diesen Code mit Ihren Team-Mitgliedern:</p>
+                                <div class="invite-code">AB12CD</div>
+                                <div class="qr-placeholder">QR Code hier</div>
+                            </div>
+                            <h4 lang="de">Teammitglieder</h4>
+                            <div class="member-list">
+                                <div class="member-item">
+                                    <div style="display: flex; align-items: center;">
+                                        <div class="member-avatar">JD</div>
+                                        <div class="member-info">
+                                            <div class="member-name">john.doe</div>
+                                            <div class="member-role" lang="de">Team-Besitzer</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- CHAPTER 7.2 -->
+                <article id="ch7-2" class="chapter">
+                    <h1 class="chapter-title" lang="de">7.2 — Team-Ansichten</h1>
+                    <p class="chapter-subtitle" lang="de">Heatmaps, Auslastung, Zeitverlauf, Excel-Export</p>
+
+                    <h2 lang="de">Team-Ansichten verfügbar</h2>
+                    <ul lang="de">
+                        <li><strong>Tagesübersicht:</strong> Who worked when</li>
+                        <li><strong>Stakeholder × Person Matrix:</strong> Verteilung der Zeit</li>
+                        <li><strong>Projekt × Person Matrix:</strong> Projektauslastung pro Person</li>
+                        <li><strong>Auslastung pro Person:</strong> Durchschnittliche Stunden</li>
+                        <li><strong>Zeitverlauf:</strong> Akkumulation über Zeit</li>
+                        <li><strong>Excel-Export:</strong> Alle Daten exportieren</li>
+                    </ul>
+                </article>
+
+                <!-- CHAPTER 8 -->
+                <article id="ch8" class="chapter">
+                    <h1 class="chapter-title" lang="de">Backup & Sicherheit</h1>
+                    <p class="chapter-subtitle" lang="de">E2E-Verschlüsselung, Cloud-Backup, Key Management</p>
+
+                    <h2 lang="de">End-to-End Verschlüsselung (AES-GCM)</h2>
+                    <p lang="de">
+                        <strong>Alle Ihre Daten werden mit AES-256-GCM verschlüsselt, bevor sie den Browser verlassen.</strong>
+                    </p>
+
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h4 lang="de">Personal Key</h4>
+                            <p lang="de">
+                                Abgeleitet von Ihrem Passwort (PBKDF2). Persönliche Daten.
+                            </p>
+                        </div>
+                        <div class="feature-card">
+                            <h4 lang="de">Team Key</h4>
+                            <p lang="de">
+                                Eindeutig pro Team. Gemeinsame Daten. Alle Mitglieder haben diesen Schlüssel.
+                            </p>
+                        </div>
+                    </div>
+
+                    <h2 lang="de">Key Storage</h2>
+                    <ul lang="de">
+                        <li><strong>Personal Key:</strong> sessionStorage (gelöscht bei Tab-Schließung)</li>
+                        <li><strong>Team Key:</strong> sessionStorage (gelöscht bei Tab-Schließung)</li>
+                        <li><strong>Passwort:</strong> NIEMALS gespeichert oder an Server gesendet</li>
+                    </ul>
+
+                    <div class="warn-box" lang="de">
+                        <strong>Passwort-Vergessen:</strong> Wenn Sie Ihr Passwort vergessen, können Sie Ihre Daten nicht wiederherstellen.
+                    </div>
+                </article>
+
+                <!-- CHAPTER 9 -->
+                <article id="ch9" class="chapter">
+                    <h1 class="chapter-title" lang="de">Einstellungen</h1>
+                    <p class="chapter-subtitle" lang="de">Profil, Theme, Sprache, Abmelden</p>
+
+                    <h2 lang="de">Theme wechseln (Cyber / Light)</h2>
+                    <p lang="de">
+                        <strong>Cyber:</strong> Dark mode mit neon cyan Akzenten<br>
+                        <strong>Light:</strong> Hell mode
+                    </p>
+
+                    <h2 lang="de">Sprache wechseln (DE / FR)</h2>
+                    <p lang="de">
+                        Vollständig zweisprachige Benutzeroberfläche.
+                    </p>
+                </article>
+
+                <!-- CHAPTER 10 -->
+                <article id="ch10" class="chapter">
+                    <h1 class="chapter-title" lang="de">Tastenkürzel</h1>
+                    <p class="chapter-subtitle" lang="de">Alle Keyboard Shortcuts für schnelle Navigation</p>
+
+                    <h2 lang="de">Shortcut-Referenz</h2>
+
+                    <div class="table-wrapper">
+                        <table class="shortcut-table">
+                            <thead>
+                                <tr>
+                                    <th lang="de">Shortcut</th>
+                                    <th lang="de">Aktion</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><kbd>Space</kbd></td>
+                                    <td lang="de">Starten/Pausieren des aktiven Timers</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>S</kbd></td>
+                                    <td lang="de">Aktiven Timer speichern</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>N</kbd></td>
+                                    <td lang="de">Manuelles Eintrag-Formular öffnen</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>Tab</kbd></td>
+                                    <td lang="de">Zum nächsten Tab wechseln</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>F</kbd></td>
+                                    <td lang="de">Filter öffnen/schließen</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>Q</kbd></td>
+                                    <td lang="de">Feierabend (alle Timer speichern)</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>?</kbd></td>
+                                    <td lang="de">Shortcut-Übersicht anzeigen</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>Esc</kbd></td>
+                                    <td lang="de">Modals schließen</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="tip-box" lang="de">
+                        <strong>Keine Ctrl-Tasten:</strong> Alle Shortcuts sind Single-Key, keine Ctrl+X Kombinationen.
+                    </div>
+                </article>
+
+                <!-- CHAPTER 11 -->
+                <article id="ch11" class="chapter">
+                    <h1 class="chapter-title" lang="de">Barrierefreiheit</h1>
+                    <p class="chapter-subtitle" lang="de">WCAG 2.1 Conformance, Keyboard Navigation</p>
+
+                    <h2 lang="de">Keyboard Navigation</h2>
+                    <ul lang="de">
+                        <li><strong>Tab:</strong> Zum nächsten fokussierbaren Element</li>
+                        <li><strong>Shift+Tab:</strong> Zum vorherigen fokussierbaren Element</li>
+                        <li><strong>Enter/Space:</strong> Aktiviert Buttons und Links</li>
+                        <li><strong>Arrow Keys:</strong> Navigiert in Listen</li>
+                        <li><strong>Esc:</strong> Schließt Modals</li>
+                    </ul>
+
+                    <h2 lang="de">ARIA Labels & Fokus-Management</h2>
+                    <p lang="de">
+                        Alle interaktiven Elemente haben aussagekräftige Labels. Fokus ist immer sichtbar.
+                    </p>
+                </article>
+
+                <!-- CHAPTER 12 -->
+                <article id="ch12" class="chapter">
+                    <h1 class="chapter-title" lang="de">Fehlerbehebung</h1>
+                    <p class="chapter-subtitle" lang="de">Häufige Probleme und Lösungen</p>
+
+                    <h2 lang="de">Timer startet nicht</h2>
+                    <ul lang="de">
+                        <li><strong>Lösung 1:</strong> Aktualisieren Sie die Seite mit F5</li>
+                        <li><strong>Lösung 2:</strong> Stellen Sie sicher, dass JavaScript aktiviert ist</li>
+                        <li><strong>Lösung 3:</strong> Löschen Sie Browser-Cookies</li>
+                    </ul>
+
+                    <h2 lang="de">Sync-Fehler ("Kategorien zeigen -")</h2>
+                    <p lang="de">
+                        Wenn Ihr Verschlüsselungsschlüssel nicht geladen wurde:
+                    </p>
+                    <div class="step-container">
+                        <div class="step-number">1</div>
+                        <div class="step-content"><strong lang="de">Melden Sie sich ab</strong></div>
+                    </div>
+                    <div class="step-container">
+                        <div class="step-number">2</div>
+                        <div class="step-content"><strong lang="de">Melden Sie sich erneut an mit korrektem Passwort</strong></div>
+                    </div>
+
+                    <h2 lang="de">QR-Code Scan funktioniert nicht</h2>
+                    <ul lang="de">
+                        <li><strong>Lösung 1:</strong> Stellen Sie sicher, dass Sie gutes Licht haben</li>
+                        <li><strong>Lösung 2:</strong> Halten Sie das Gerät ruhig</li>
+                        <li><strong>Fallback:</strong> Verwenden Sie den 6-stelligen Code</li>
+                    </ul>
+                </article>
+
+                <!-- CHAPTER 13 -->
+                <article id="ch13" class="chapter">
+                    <h1 class="chapter-title" lang="de">Glossar</h1>
+                    <p class="chapter-subtitle" lang="de">Alle Begriffe erklärt</p>
+
+                    <div class="glossary-term">
+                        <dt lang="de">Codename</dt>
+                        <dd lang="de">Ihr eindeutiger Benutzer-ID. Beispiel: john.doe, team_lead.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">Stakeholder</dt>
+                        <dd lang="de">Person oder Organisation, die von einer Aktivität profitiert. Multi-Select in Einträgen.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">Projekt/Produkt</dt>
+                        <dd lang="de">Größerer Arbeitszusammenhang. Single-Select in Einträgen.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">Tätigkeit</dt>
+                        <dd lang="de">Art der Arbeit. Beispiele: Coding, Testing, Design. Single-Select.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">Format</dt>
+                        <dd lang="de">Wie wird die Arbeit durchgeführt: Einzelarbeit, Meeting, Telefonat, Workshop.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">Personal Key</dt>
+                        <dd lang="de">Verschlüsselungsschlüssel, abgeleitet von Ihrem Passwort. Verschlüsselt persönliche Daten.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">Team Key</dt>
+                        <dd lang="de">Eindeutige Schlüssel pro Team. Verschlüsselt gemeinsame Daten.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">AES-GCM</dt>
+                        <dd lang="de">Advanced Encryption Standard mit Galois/Counter Mode. 256-Bit Schlüssellänge.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">Multi-Stakeholder</dt>
+                        <dd lang="de">Eintrag mit mehreren Stakeholdern. Dauer wird einmal gezählt (Wanduhrenzeit).</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">DayRing</dt>
+                        <dd lang="de">Visuelle Anzeige des täglichen Fortschritts. Grün = unter 8h24, Gold = 8h24, Rot = über 8h24.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">Fuzzy Search</dt>
+                        <dd lang="de">Intelligente Suchfunktion mit Frecency-Ranking (Häufigkeit + Rezenz).</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">Invite Code</dt>
+                        <dd lang="de">6-stelliger alphanumerischer Code zur Team-Beitrittung. Beispiel: AB12CD.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">Cyber Theme</dt>
+                        <dd lang="de">Dark Mode mit neon cyan (#00e5ff) Akzenten und Gold (#c9a962) Highlights.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">PWA (Progressive Web App)</dt>
+                        <dd lang="de">Web-Anwendung, die wie eine native App installiert werden kann. Funktioniert offline.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">IndexedDB</dt>
+                        <dd lang="de">Browser-Datenbank für offline Zwischenspeicherung von verschlüsselten Daten.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">sessionStorage</dt>
+                        <dd lang="de">Browser-Speicher, der gelöscht wird wenn der Tab geschlossen wird. Speichert Verschlüsselungsschlüssel.</dd>
+                    </div>
+
+                    <div class="glossary-term">
+                        <dt lang="de">UnlockScreen</dt>
+                        <dd lang="de">Bildschirm nach Tab-Schließung. Sie müssen Passwort erneut eingeben zur Schlüsselableitung.</dd>
+                    </div>
+
+                </article>
+
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const navLinks = document.querySelectorAll('.nav-link');
+        const chapters = document.querySelectorAll('.chapter');
+        const themeBtn = document.getElementById('themeBtn');
+        const langBtn = document.getElementById('langBtn');
+        const body = document.body;
+
+        let currentTheme = localStorage.getItem('theme') || 'cyber';
+        let currentLang = localStorage.getItem('lang') || 'de';
+
+        applyTheme(currentTheme);
+        applyLang(currentLang);
+
+        themeBtn.addEventListener('click', () => {
+            currentTheme = currentTheme === 'cyber' ? 'light' : 'cyber';
+            applyTheme(currentTheme);
+            localStorage.setItem('theme', currentTheme);
+        });
+
+        function applyTheme(theme) {
+            body.classList.remove('cyber', 'light');
+            body.classList.add(theme);
+            themeBtn.textContent = theme === 'cyber' ? '🌙 Cyber' : '☀️ Light';
+        }
+
+        langBtn.addEventListener('click', () => {
+            currentLang = currentLang === 'de' ? 'fr' : 'de';
+            applyLang(currentLang);
+            localStorage.setItem('lang', currentLang);
+        });
+
+        function applyLang(lang) {
+            body.classList.remove('lang-de', 'lang-fr');
+            body.classList.add(`lang-${lang}`);
+            langBtn.textContent = lang === 'de' ? '🌐 DE / FR' : '🌐 FR / DE';
+        }
+
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const chapterId = link.getAttribute('data-chapter');
+                if (chapterId) {
+                    showChapter(chapterId);
+                }
+            });
+        });
+
+        function showChapter(chapterId) {
+            chapters.forEach(ch => ch.classList.remove('active'));
+            const targetChapter = document.getElementById(chapterId);
+            if (targetChapter) {
+                targetChapter.classList.add('active');
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                    if (link.getAttribute('data-chapter') === chapterId) {
+                        link.classList.add('active');
+                    }
+                });
+                document.querySelector('.main-content').scrollTop = 0;
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '?') {
+                alert('Zeiterfassung V1.0 Shortcuts:\n\nSpace = Start/Pause\nS = Save\nN = New Entry\nTab = Next Tab\nF = Filter\nQ = End Day\n? = Help\nEsc = Close');
+            }
+        });
+    </script>
+</body>
+</html>
