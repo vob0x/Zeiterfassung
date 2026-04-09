@@ -67,13 +67,20 @@ export function TimelineChart({ entries, onDrillDown }: TimelineChartProps) {
     return <div style={{ color: 'var(--text-muted)' }}>{t('dash.noData')}</div>;
   }
 
-  const canvasWidth = Math.max(600, chartData.length * 40);
+  // Bar sizing: cap the per-bar width so a chart with few days doesn't
+  // produce a single huge bar that overflows the mobile viewport.
+  const MAX_BAR_WIDTH = 56;
+  const SLOT_WIDTH = 40; // horizontal space allocated per day
+  // Make the canvas wide enough for all bars at SLOT_WIDTH each. With only
+  // a few days the canvas stays narrow (no forced 600px min) so the chart
+  // fits on a phone screen without horizontal cut-off.
+  const canvasWidth = Math.max(320, chartData.length * SLOT_WIDTH + 80);
   const canvasHeight = 300;
   const padding = 40;
   const chartWidth = canvasWidth - padding * 2;
   const chartHeight = canvasHeight - padding * 2;
-  const barWidth = chartWidth / chartData.length * 0.8;
   const barSpacing = chartWidth / chartData.length;
+  const barWidth = Math.min(MAX_BAR_WIDTH, barSpacing * 0.8);
 
   return (
     <div className="overflow-x-auto pb-4">

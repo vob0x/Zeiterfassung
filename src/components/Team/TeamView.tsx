@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useI18n } from '../../i18n';
 import { useTeamStore } from '../../stores/teamStore';
 import { useEntriesStore } from '../../stores/entriesStore';
+import { useMasterStore } from '../../stores/masterStore';
 import { useUiStore } from '../../stores/uiStore';
 import { isSupabaseAvailable } from '../../lib/supabase';
 import ConfirmDialog from '../UI/ConfirmDialog';
@@ -94,6 +95,16 @@ export default function TeamView() {
     setIsJoining(true);
     try {
       await joinTeam(code);
+      // CRITICAL: Re-fetch master data and entries after joining.
+      // On login, fetch ran in solo mode (no team → only user's own empty rows).
+      // After joining, we must re-query so RLS returns all teammates' rows.
+      // Without this, the user sees empty Stakeholder/Projekt/Tätigkeit/Format lists.
+      try {
+        await useMasterStore.getState().fetch();
+        await useEntriesStore.getState().fetch();
+      } catch (e) {
+        console.warn('[Team Join] Post-join data refresh failed:', e);
+      }
       showToast(t('toast.syncOk'), 'success');
       setInviteCode('');
       setTeamName('');

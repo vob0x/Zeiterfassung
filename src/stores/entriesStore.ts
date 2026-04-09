@@ -1196,8 +1196,19 @@ export function subscribeToEntriesSync(): void {
           table: 'time_entries',
           filter: `user_id=eq.${profile.id}`,
         },
-        () => {
+        (payload: any) => {
           setTimeout(() => pullEntriesFromSupabase(), 500);
+          // When a new entry is INSERTed from another device, it was likely
+          // created by a stopTimer there → also pull timers so any matching
+          // running timer on THIS device gets cleared. This acts as a
+          // safety net if the running_timers Realtime channel missed the
+          // DELETE (e.g. mobile was backgrounded, websocket dropped).
+          if (payload?.eventType === 'INSERT') {
+            // Dynamic import to avoid circular dependency with timerStore
+            import('./timerStore').then(({ pullTimersFromSupabase }) => {
+              setTimeout(() => pullTimersFromSupabase(), 600);
+            }).catch(() => {});
+          }
         }
       )
       .subscribe();

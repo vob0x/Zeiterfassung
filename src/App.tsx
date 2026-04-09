@@ -77,16 +77,20 @@ function AppContent() {
       if (now - lastVisibilitySync.current < 5000) return
       lastVisibilitySync.current = now
 
-      // Re-sync team key first, then pull fresh data
+      // Pull timers IMMEDIATELY without waiting for team sync. Timers do not
+      // contain encrypted fields, so we don't need the Team Key. Waiting
+      // behind syncTeam (which may take 1-2s on mobile) caused the timer to
+      // appear to keep ticking after being stopped on another device.
+      pullTimersFromSupabase()
+
+      // Re-sync team key first, then pull fresh encrypted data
       syncTeam().then(() => {
         pullEntriesFromSupabase()
         pullMasterDataFromSupabase()
-        pullTimersFromSupabase()
       }).catch(() => {
         // Team sync failed — still try to pull with existing keys
         pullEntriesFromSupabase()
         pullMasterDataFromSupabase()
-        pullTimersFromSupabase()
       })
     }
 

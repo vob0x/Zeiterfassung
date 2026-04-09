@@ -89,6 +89,34 @@ function ensureTickInterval(get: () => TimerState, set: (partial: Partial<TimerS
 // undo the change before the DB write settles.
 let _suppressUntil: number = 0;
 
+// ── Server-time anchor ─────────────────────────────────────────────────
+//
+// To prevent clock skew between devices from causing the same running
+// timer to display different elapsed times, we never compute "elapsed
+// since last save" using the local Date.now() against a remote saved_at.
+// Instead, fetchServerNowMs() returns the database server's current time
+// in epoch ms via the public.server_now_ms() RPC. We then derive elapsed
+// using ONLY server-clock values:
+//
+//     elapsed_server_ms = server_now_ms - saved_at
+//
+// Both devices arrive at identical results regardless of how skewed
+// their own system clocks are. The local startTime that we install
+// after restore is anchored to (Date.now() - paused_ms_total), so future
+// ticking advances at the local clock's natural rate without re-introducing
+// skew.
+async function fetchServerNowMs(): Promise<number | null> {
+  if (!isSupabaseAvailable() || !supabaseClient) return null;
+  try {
+    const { data, error } = await supabaseClient.rpc('server_now_ms');
+    if (error || data == null) return null;
+    const n = Number(data);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Helper: serialize current slots ────────────────────────────────────
 
 function serializeSlots(slots: TimerSlot[]): SerializedSlot[] {
@@ -417,47 +445,87 @@ export const useTimerStore = create<TimerState>((set, get) => ({
   restoreTimers: async () => {
     const profile = useAuthStore.getState().profile;
     let saved: SavedTimerState | null = null;
+    let supabaseAuthoritative = false;
+    // serverElapsedFromSave: real elapsed since the last push, computed
+    // entirely in SERVER time so two devices with skewed clocks agree.
+    // null means "use local clock fallback" (offline/localStorage path).
+    let serverElapsedFromSave: number | null = null;
 
     if (isSupabaseAvailable() && supabaseClient && profile?.id && !profile.id.startsWith('local_')) {
       try {
-        const { data, error } = await supabaseClient
-          .from('running_timers')
-          .select('*')
-          .eq('user_id', profile.id);
+        const [timersRes, serverNowMs] = await Promise.all([
+          supabaseClient.from('running_timers').select('*').eq('user_id', profile.id),
+          fetchServerNowMs(),
+        ]);
+        const { data, error } = timersRes;
 
-        if (!error && data && data.length > 0) {
-          const sbSlots: SerializedSlot[] = data.map((row: any) => ({
-            id: row.id,
-            date: row.date || '',
-            stakeholder: JSON.parse(row.stakeholder || '[]'),
-            projekt: row.projekt || '',
-            taetigkeit: row.taetigkeit || '',
-            format: row.format || 'Einzelarbeit',
-            start_time: row.start_time || '',
-            notiz: row.notiz || '',
-            is_running: row.was_running,
-            color: row.color || '',
-            pausedMs: Number(row.paused_ms) || 0,
-            isPaused: row.is_paused,
-            wasRunning: row.was_running,
-            elapsed_ms: 0,
-          }));
-          const savedAt = Math.max(...data.map((r: any) => Number(r.saved_at) || 0));
-          saved = { slots: sbSlots, savedAt };
+        if (!error) {
+          // Supabase is the SOURCE OF TRUTH. If the query succeeded we must
+          // trust its result — even if it returned an empty array. Otherwise
+          // a stale localStorage entry (e.g. a running timer that was already
+          // stopped on another device) would be restored and keep ticking.
+          supabaseAuthoritative = true;
+          if (data && data.length > 0) {
+            const sbSlots: SerializedSlot[] = data.map((row: any) => ({
+              id: row.id,
+              date: row.date || '',
+              stakeholder: JSON.parse(row.stakeholder || '[]'),
+              projekt: row.projekt || '',
+              taetigkeit: row.taetigkeit || '',
+              format: row.format || 'Einzelarbeit',
+              start_time: row.start_time || '',
+              notiz: row.notiz || '',
+              is_running: row.was_running,
+              color: row.color || '',
+              pausedMs: Number(row.paused_ms) || 0,
+              isPaused: row.is_paused,
+              wasRunning: row.was_running,
+              elapsed_ms: 0,
+            }));
+            const savedAt = Math.max(...data.map((r: any) => Number(r.saved_at) || 0));
+            saved = { slots: sbSlots, savedAt };
+            // Compute elapsed using SERVER clock pair (skew-free).
+            if (serverNowMs && savedAt > 0) {
+              const e = serverNowMs - savedAt;
+              // Clamp to non-negative — if the server clock briefly lags
+              // behind a freshly-pushed saved_at we don't want negatives.
+              serverElapsedFromSave = e >= 0 ? e : 0;
+            }
+          }
         }
       } catch (e) {
         // Supabase restore failed, fall back to localStorage
       }
     }
 
-    if (!saved) {
+    // Only fall back to localStorage if Supabase was unreachable/errored.
+    // A successful empty response means another device cleared the timers
+    // and we must not resurrect them from localStorage.
+    if (!saved && !supabaseAuthoritative) {
       saved = getUserData<SavedTimerState | null>('timerSlots', null);
     }
 
-    if (!saved || !saved.slots || saved.slots.length === 0) return;
+    if (!saved || !saved.slots || saved.slots.length === 0) {
+      // Supabase said "no timers" — make sure local state (and localStorage)
+      // also show no timers, so nothing resurrects on the next reload.
+      if (supabaseAuthoritative) {
+        const cur = get();
+        if (cur.taskSlots.length > 0 || cur.tickInterval) {
+          if (cur.tickInterval) clearInterval(cur.tickInterval);
+          set({ taskSlots: [], tickInterval: null, activeSlotId: null });
+        }
+        removeUserData('timerSlots');
+      }
+      return;
+    }
 
     const now = Date.now();
-    const elapsed = now - saved.savedAt;
+    // Prefer server-derived elapsed (skew-free) over local-clock subtraction.
+    // Local-clock fallback is only used when restoring from localStorage
+    // (offline boot) where saved.savedAt is the same device's own clock.
+    const elapsed = serverElapsedFromSave != null
+      ? serverElapsedFromSave
+      : now - saved.savedAt;
     let hasRunning = false;
 
     const restored: TimerSlot[] = saved.slots.map((s, idx) => {
@@ -569,6 +637,12 @@ async function pushTimersToSupabase(slots: SerializedSlot[]): Promise<void> {
       return;
     }
 
+    // Stamp saved_at in SERVER clock space so the read side can compute
+    // elapsed using server-clock subtraction (skew-free across devices).
+    // Fall back to local Date.now() only if the RPC is unreachable.
+    const serverNowMs = await fetchServerNowMs();
+    const stampMs = serverNowMs ?? Date.now();
+
     // Insert current timer state
     const rows = slots.map((s) => ({
       id: s.id,
@@ -584,7 +658,7 @@ async function pushTimersToSupabase(slots: SerializedSlot[]): Promise<void> {
       paused_ms: s.pausedMs,
       is_paused: s.isPaused,
       was_running: s.wasRunning,
-      saved_at: Date.now(),
+      saved_at: stampMs,
     }));
 
     const { error: insError } = await supabaseClient
@@ -622,10 +696,13 @@ export async function pullTimersFromSupabase(): Promise<void> {
   if (!sessionOk) return;
 
   try {
-    const { data, error } = await supabaseClient
-      .from('running_timers')
-      .select('*')
-      .eq('user_id', profile.id);
+    // Fetch timers + server time in parallel — server time is the anchor
+    // we use to compute elapsed in a skew-free way.
+    const [timersRes, serverNowMs] = await Promise.all([
+      supabaseClient.from('running_timers').select('*').eq('user_id', profile.id),
+      fetchServerNowMs(),
+    ]);
+    const { data, error } = timersRes;
 
     if (error) return;
 
@@ -671,7 +748,15 @@ export async function pullTimersFromSupabase(): Promise<void> {
     // ── Rebuild local state from remote ───────────────────────────
     const now = Date.now();
     const remoteSavedAt = Math.max(...data.map((r: any) => Number(r.saved_at) || 0));
-    const elapsed = remoteSavedAt > 0 ? now - remoteSavedAt : 0;
+    // Compute elapsed using server clock (skew-free across devices).
+    // Fall back to local-clock subtraction only if server time is unavailable.
+    let elapsed: number;
+    if (serverNowMs && remoteSavedAt > 0) {
+      const e = serverNowMs - remoteSavedAt;
+      elapsed = e >= 0 ? e : 0;
+    } else {
+      elapsed = remoteSavedAt > 0 ? now - remoteSavedAt : 0;
+    }
     let hasRunning = false;
 
     const restored: TimerSlot[] = data.map((row: any, idx: number) => {
