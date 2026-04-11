@@ -414,6 +414,25 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
             }
           }
         }
+
+        // ── One-time Team Key re-encryption for existing members ──
+        // When a user is in a team but their entries were encrypted before
+        // joining (with the Personal Key), teammates can't decrypt them.
+        // This runs ONCE per team (flag in localStorage), fire-and-forget.
+        const teamState = useTeamStore.getState();
+        if (teamState.connected && teamState.team?.id && hasTeamKey() && hasEncryptionKey()) {
+          const TEAM_REENCRYPT_KEY = `ze_team_reencrypt_${teamState.team.id}`;
+          if (!localStorage.getItem(TEAM_REENCRYPT_KEY)) {
+            console.info('[ReEncrypt] First fetch with Team Key — re-encrypting own data for team visibility');
+            localStorage.setItem(TEAM_REENCRYPT_KEY, Date.now().toString());
+            // Fire-and-forget: don't block the UI
+            reEncryptEntriesForTeam().catch(() => {});
+            // Master data is handled by syncAllMasterData in masterStore
+            import('./masterStore').then(({ syncAllMasterData }) => {
+              syncAllMasterData().catch(() => {});
+            }).catch(() => {});
+          }
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch entries';
