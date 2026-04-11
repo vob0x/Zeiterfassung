@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useI18n } from '../../i18n';
 import { useTeamStore } from '../../stores/teamStore';
-import { useEntriesStore } from '../../stores/entriesStore';
-import { useMasterStore } from '../../stores/masterStore';
+import { useEntriesStore, reEncryptEntriesForTeam } from '../../stores/entriesStore';
+import { useMasterStore, syncAllMasterData } from '../../stores/masterStore';
 import { useUiStore } from '../../stores/uiStore';
 import { isSupabaseAvailable } from '../../lib/supabase';
 import ConfirmDialog from '../UI/ConfirmDialog';
@@ -95,11 +95,17 @@ export default function TeamView() {
     setIsJoining(true);
     try {
       await joinTeam(code);
-      // CRITICAL: Re-fetch master data and entries after joining.
-      // On login, fetch ran in solo mode (no team → only user's own empty rows).
-      // After joining, we must re-query so RLS returns all teammates' rows.
-      // Without this, the user sees empty Stakeholder/Projekt/Tätigkeit/Format lists.
+      // CRITICAL: Re-encrypt the user's existing data with the Team Key so
+      // teammates can read it, then re-fetch everything (master + entries)
+      // so RLS-visible teammate rows are pulled with the new Team Key.
+      // Without this, the user sees empty Stakeholder/Projekt/Tätigkeit lists
+      // and teammates can't decrypt this user's entries.
       try {
+        // 1. Re-encrypt own data: Personal Key → Team Key
+        //    (runs in background, non-blocking for the toast)
+        syncAllMasterData();           // master data (stakeholders, projects, …)
+        reEncryptEntriesForTeam();     // time_entries
+        // 2. Re-fetch to pull teammates' data
         await useMasterStore.getState().fetch();
         await useEntriesStore.getState().fetch();
       } catch (e) {

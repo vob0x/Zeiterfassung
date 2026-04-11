@@ -1173,6 +1173,73 @@ async function pushLocalEntriesToSupabase(entries: TimeEntry[], userId: string):
   }
 }
 
+/**
+ * Re-encrypt ALL of the current user's time_entries with the Team Key.
+ *
+ * Called once after a user joins a team. Before joining, entries were
+ * encrypted with the Personal Key — teammates can't decrypt those.
+ * This function reads each raw row, decrypts (Personal Key fallback),
+ * re-encrypts with the Team Key, and batch-upserts back to Supabase.
+ *
+ * Safe to call multiple times — entries already encrypted with the
+ * Team Key will decrypt via Team Key on the first try and be
+ * re-encrypted with the same key (effectively a no-op with a new IV).
+ */
+export async function reEncryptEntriesForTeam(): Promise<void> {
+  const profile = useAuthStore.getState().profile;
+  if (!isSupabaseAvailable() || !supabaseClient || !profile?.id) return;
+  if (!hasEncryptionKey() || !hasTeamKey()) return;
+
+  const sessionOk = await ensureValidSession();
+  if (!sessionOk) return;
+
+  try {
+    // 1. Fetch raw (encrypted) rows
+    const { data, error } = await supabaseClient
+      .from('time_entries')
+      .select('*')
+      .eq('user_id', profile.id);
+
+    if (error || !data || data.length === 0) return;
+
+    console.info(`[ReEncrypt] Re-encrypting ${data.length} entries with Team Key…`);
+
+    // 2. Decrypt → re-encrypt in chunks to avoid overwhelming the browser
+    const CHUNK = 50;
+    for (let i = 0; i < data.length; i += CHUNK) {
+      const chunk = data.slice(i, i + CHUNK);
+      const reEncrypted = await Promise.all(
+        chunk.map(async (row: any) => {
+          // Decrypt each encrypted field (tries Team Key, falls back to Personal Key)
+          const decrypted: Record<string, any> = { ...row };
+          for (const field of ENCRYPTED_ENTRY_FIELDS) {
+            if (decrypted[field]) {
+              const plaintext = await decryptFieldSmart(decrypted[field]);
+              // For stakeholder, it was stored as JSON array string
+              decrypted[field] = plaintext;
+            }
+          }
+          // Re-encrypt with Team Key (encryptFieldForTeam uses getActiveKey → Team Key)
+          return encryptEntryForSupabase(decrypted);
+        })
+      );
+
+      // 3. Batch upsert chunk
+      const { error: upsertErr } = await supabaseClient
+        .from('time_entries')
+        .upsert(reEncrypted, { onConflict: 'id' });
+
+      if (upsertErr) {
+        console.warn(`[ReEncrypt] Chunk ${i}–${i + chunk.length} failed:`, upsertErr.message);
+      }
+    }
+
+    console.info('[ReEncrypt] Entries re-encryption complete');
+  } catch (e) {
+    console.warn('[ReEncrypt] Re-encryption failed:', e);
+  }
+}
+
 export function subscribeToEntriesSync(): void {
   const profile = useAuthStore.getState().profile;
   if (!isSupabaseAvailable() || !supabaseClient || !profile?.id || profile.id.startsWith('local_')) return;
