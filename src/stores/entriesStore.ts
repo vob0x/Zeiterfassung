@@ -208,7 +208,7 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
           // plaintext for entries where decryption fails.
           const failedCount = _batchDecryptFail;
           if (failedCount > 0 && hasEncryptionKey()) {
-            const REENCRYPT_KEY = 'ze_reencrypt_done_v3';
+            const REENCRYPT_KEY = 'ze_reencrypt_done_v4';
             const alreadyDone = localStorage.getItem(REENCRYPT_KEY);
             if (!alreadyDone) {
               console.info(`[ReEncrypt] ${failedCount} fields failed — running CSV-based restore + re-encryption`);
@@ -424,9 +424,12 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
           const TEAM_REENCRYPT_KEY = `ze_team_reencrypt_${teamState.team.id}`;
           if (!localStorage.getItem(TEAM_REENCRYPT_KEY)) {
             console.info('[ReEncrypt] First fetch with Team Key — re-encrypting own data for team visibility');
-            localStorage.setItem(TEAM_REENCRYPT_KEY, Date.now().toString());
-            // Fire-and-forget: don't block the UI
-            reEncryptEntriesForTeam().catch(() => {});
+            // Fire-and-forget: don't block the UI. Set flag only after success.
+            reEncryptEntriesForTeam().then(() => {
+              localStorage.setItem(TEAM_REENCRYPT_KEY, Date.now().toString());
+            }).catch(() => {
+              console.warn('[ReEncrypt] Team re-encryption failed — will retry on next fetch');
+            });
             // Master data is handled by syncAllMasterData in masterStore
             import('./masterStore').then(({ syncAllMasterData }) => {
               syncAllMasterData().catch(() => {});
@@ -1225,23 +1228,39 @@ export async function reEncryptEntriesForTeam(): Promise<void> {
 
     // 2. Decrypt → re-encrypt in chunks to avoid overwhelming the browser
     const CHUNK = 50;
+    let reEncryptedTotal = 0;
+    let skippedTotal = 0;
     for (let i = 0; i < data.length; i += CHUNK) {
       const chunk = data.slice(i, i + CHUNK);
-      const reEncrypted = await Promise.all(
-        chunk.map(async (row: any) => {
-          // Decrypt each encrypted field (tries Team Key, falls back to Personal Key)
-          const decrypted: Record<string, any> = { ...row };
-          for (const field of ENCRYPTED_ENTRY_FIELDS) {
-            if (decrypted[field]) {
-              const plaintext = await decryptFieldSmart(decrypted[field]);
-              // For stakeholder, it was stored as JSON array string
-              decrypted[field] = plaintext;
+      const reEncrypted: any[] = [];
+      for (const row of chunk) {
+        const decrypted: Record<string, any> = { ...row };
+        let decryptionFailed = false;
+
+        for (const field of ENCRYPTED_ENTRY_FIELDS) {
+          const raw = decrypted[field];
+          if (raw && typeof raw === 'string' && raw.startsWith('enc:')) {
+            const plaintext = await decryptFieldSmart(raw);
+            // If decryption returned empty but the original was a real ciphertext,
+            // the key didn't match → skip this entry to avoid data loss!
+            if (!plaintext) {
+              decryptionFailed = true;
+              break;
             }
+            decrypted[field] = plaintext;
           }
-          // Re-encrypt with Team Key (encryptFieldForTeam uses getActiveKey → Team Key)
-          return encryptEntryForSupabase(decrypted);
-        })
-      );
+        }
+
+        if (decryptionFailed) {
+          skippedTotal++;
+          continue; // Don't touch this entry — preserve original ciphertext
+        }
+
+        // Re-encrypt with Team Key (encryptFieldForTeam uses getActiveKey → Team Key)
+        reEncrypted.push(await encryptEntryForSupabase(decrypted));
+      }
+
+      if (reEncrypted.length === 0) continue;
 
       // 3. Batch upsert chunk
       const { error: upsertErr } = await supabaseClient
@@ -1250,10 +1269,16 @@ export async function reEncryptEntriesForTeam(): Promise<void> {
 
       if (upsertErr) {
         console.warn(`[ReEncrypt] Chunk ${i}–${i + chunk.length} failed:`, upsertErr.message);
+      } else {
+        reEncryptedTotal += reEncrypted.length;
       }
     }
 
-    console.info('[ReEncrypt] Entries re-encryption complete');
+    if (skippedTotal > 0) {
+      console.warn(`[ReEncrypt] Skipped ${skippedTotal} entries (decryption failed — preserved original ciphertext)`);
+    }
+
+    console.info(`[ReEncrypt] Re-encryption complete: ${reEncryptedTotal} entries updated, ${skippedTotal} skipped`);
   } catch (e) {
     console.warn('[ReEncrypt] Re-encryption failed:', e);
   }
