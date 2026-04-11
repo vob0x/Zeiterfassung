@@ -35,7 +35,11 @@ export function TeamDaily({ memberEntries, entries }: TeamDailyProps) {
         const memberDateEntries = (memberEntries.get(memberId) || []).filter((e) => e.date === date);
         const hours = memberDateEntries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0) / (1000 * 60 * 60);
         matrix[memberId][date] = hours;
-        if (hours > 0) {
+        // Only count weekdays (Mo–Fr) for the average — weekend work
+        // is voluntary/exceptional and shouldn't dilute the daily average.
+        const dayOfWeek = new Date(date).getDay(); // 0=So, 6=Sa
+        const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+        if (hours > 0 && isWeekday) {
           total += hours;
           dayCount += 1;
         }
