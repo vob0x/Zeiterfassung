@@ -11,7 +11,6 @@
   --gold: #d4af37; --gold-light: #e4c76d; --gold-glow: rgba(212,175,55,0.12);
   --navy: #0a1628; --navy-mid: #2c3e50; --text: #1a1a1a; --text-mid: #2c3e50; --text-muted: #666;
   --bg: #f5f6f8; --surface: #ffffff; --border: #e4e6ea; --radius: 12px;
-  --cyber-dark: #0d1117; --cyber-dark-bg: #161b22; --cyber-cyan: #00e5ff; --cyber-green: #6ec49e;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Inter', -apple-system, sans-serif; color: var(--text); background: var(--bg); line-height: 1.6; }
@@ -56,47 +55,6 @@ main { max-width: 820px; margin: 0 auto; padding: 40px 24px 80px; }
 .ico { display: inline-block; width: 18px; height: 18px; vertical-align: -3px; margin-right: 5px; }
 .ico svg { width: 100%; height: 100%; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 .ico-sm { width: 14px; height: 14px; vertical-align: -2px; }
-
-/* CSS Mockups */
-.mockup-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin: 24px 0; }
-.mockup-title { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; }
-
-/* Login Mockup */
-.mockup-login { background: var(--cyber-dark-bg); border-radius: 12px; padding: 32px 24px; text-align: center; }
-.mockup-login-logo { font-family: 'Playfair Display', serif; font-size: 1.8rem; font-weight: 700; color: var(--cyber-cyan); margin-bottom: 24px; }
-.mockup-login-title { color: white; font-size: 1rem; font-weight: 600; margin-bottom: 20px; }
-.mockup-form-group { margin-bottom: 14px; text-align: left; }
-.mockup-form-group label { display: block; font-size: 0.75rem; font-weight: 600; color: rgba(255,255,255,0.6); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
-.mockup-form-group input { width: 100%; padding: 10px 12px; background: rgba(0,229,255,0.05); border: 1px solid var(--cyber-cyan); border-radius: 6px; color: white; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
-.mockup-form-group input::placeholder { color: rgba(255,255,255,0.3); }
-.mockup-button { width: 100%; padding: 10px; background: var(--cyber-cyan); color: var(--cyber-dark); border: none; border-radius: 6px; font-weight: 600; font-size: 0.9rem; cursor: pointer; margin-bottom: 10px; }
-.mockup-button:hover { background: #00d4e8; }
-.mockup-button-secondary { background: rgba(110,196,158,0.3); color: var(--cyber-green); }
-.mockup-button-secondary:hover { background: rgba(110,196,158,0.5); }
-.mockup-divider { color: rgba(255,255,255,0.2); font-size: 0.8rem; margin: 16px 0; }
-
-/* Timer Mockup */
-.mockup-timer { background: var(--cyber-dark-bg); border-radius: 12px; padding: 24px; }
-.mockup-timer-header { font-family: 'Playfair Display', serif; font-size: 1.2rem; font-weight: 600; color: white; margin-bottom: 16px; }
-.mockup-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
-.mockup-field-row.full { grid-template-columns: 1fr; }
-.mockup-field-group { display: flex; flex-direction: column; }
-.mockup-field-group label { font-size: 0.75rem; font-weight: 600; color: rgba(255,255,255,0.6); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
-.mockup-field-group select { padding: 8px 10px; background: rgba(0,229,255,0.05); border: 1px solid var(--cyber-cyan); border-radius: 6px; color: white; font-family: 'Inter', sans-serif; font-size: 0.85rem; }
-.mockup-field-group select option { background: var(--cyber-dark); color: white; }
-.mockup-timer-display { background: rgba(0,229,255,0.1); border: 2px solid var(--cyber-cyan); border-radius: 8px; padding: 16px; margin: 16px 0; text-align: center; }
-.mockup-timer-value { font-family: 'JetBrains Mono', monospace; font-size: 2.4rem; font-weight: 600; color: var(--cyber-cyan); line-height: 1; }
-.mockup-timer-label { font-size: 0.75rem; color: rgba(0,229,255,0.7); margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-.mockup-button-group { display: flex; gap: 10px; }
-.mockup-button-group button { flex: 1; padding: 10px; border: none; border-radius: 6px; font-weight: 600; font-size: 0.9rem; cursor: pointer; }
-.mockup-button-start { background: var(--cyber-green); color: white; }
-.mockup-button-start:hover { background: #5eb08e; }
-.mockup-button-pause { background: rgba(212,175,55,0.4); color: var(--gold); }
-.mockup-button-pause:hover { background: rgba(212,175,55,0.6); }
-.mockup-checkbox-group { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.mockup-checkbox-group input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--cyber-cyan); cursor: pointer; }
-.mockup-checkbox-group label { color: rgba(255,255,255,0.8); font-size: 0.85rem; cursor: pointer; }
-
 @media print { body { background: white; } .lang-toggle { display: none; } main { max-width: 100%; padding: 20px; } }
 </style>
 </head>
@@ -105,227 +63,98 @@ main { max-width: 820px; margin: 0 auto; padding: 40px 24px 80px; }
 <div class="page-header">
   <div class="lang-toggle"><button class="lang-btn active" onclick="setLang('de')">DE</button><button class="lang-btn" onclick="setLang('fr')">FR</button></div>
   <h1><span lang="de">Zeiterfassung – Quick-Start-Guide</span><span lang="fr">Saisie du temps – Guide de démarrage rapide</span></h1>
-  <div class="subtitle"><span lang="de">In 5 Schritten zur ersten Zeitbuchung</span><span lang="fr">Votre première saisie en 5 étapes</span></div>
-  <div class="version">V1.0 · April 2026</div>
+  <div class="subtitle"><span lang="de">PWA mit End-to-End-Verschlüsselung in 5 Schritten</span><span lang="fr">PWA avec chiffrement de bout en bout en 5 étapes</span></div>
+  <div class="version">V1.0 · April 2026 · NDB/COM</div>
 </div>
 
 <main>
   <div class="section-label"><h2><span lang="de">Erste Schritte</span><span lang="fr">Premiers pas</span></h2></div>
 
   <div class="step"><div class="step-num">1</div><div class="step-body">
-    <h3><span lang="de">App öffnen & anmelden</span><span lang="fr">Ouvrir l'app & s'authentifier</span></h3>
-    <p lang="de">Öffne <strong>https://vob0x.github.io/Zeiterfassung</strong>. Melde dich mit <strong>Codename + Passwort</strong> an. Das Passwort wird verwendet, um deinen persönlichen Verschlüsselungsschlüssel abzuleiten — ein sicherer Standard ohne E-Mail-Verifikation. Beim ersten Login wird automatisch ein E2E-Verschlüsselungsschlüssel generiert und dein Profil in der Cloud gespeichert.</p>
-    <p lang="fr">Ouvrez <strong>https://vob0x.github.io/Zeiterfassung</strong>. Identifiez-vous avec <strong>Codename + mot de passe</strong>. Le mot de passe est utilisé pour dériver votre clé de chiffrement personnelle — un standard sécurisé sans vérification par email. À la première connexion, une clé de chiffrement E2E est générée automatiquement et votre profil est stocké dans le cloud.</p>
+    <h3><span lang="de">Registrieren & Anmelden</span><span lang="fr">S'enregistrer et se connecter</span></h3>
+    <p lang="de">Öffne die App-URL im Browser (PWA funktioniert auf Handy und Desktop). Registriere dich mit E-Mail und Passwort — oder melde dich an, falls du bereits einen Account hast. Das Passwort wird zur Ableitung deines persönlichen Verschlüsselungsschlüssels verwendet. Alle deine Daten sind E2E-verschlüsselt.</p>
+    <p lang="fr">Ouvrez l'URL de l'app dans votre navigateur (PWA fonctionne sur téléphone et bureau). Inscrivez-vous avec votre email et mot de passe — ou connectez-vous si vous avez déjà un compte. Le mot de passe sert à dériver votre clé de chiffrement personnelle. Toutes vos données sont E2E-chiffrées.</p>
   </div></div>
 
-  <!-- Login Mockup -->
-  <div class="mockup-section">
-    <div class="mockup-title" lang="de">So sieht der Login-Screen aus (Cyber-Theme)</div>
-    <div class="mockup-title" lang="fr">Voici à quoi ressemble l'écran de connexion (thème Cyber)</div>
-    <div class="mockup-login">
-      <div class="mockup-login-logo">⏱️ ZE</div>
-      <div class="mockup-login-title" lang="de">Zeiterfassung</div>
-      <div class="mockup-login-title" lang="fr">Saisie du temps</div>
-      <div class="mockup-form-group">
-        <label lang="de">Codename</label>
-        <label lang="fr">Pseudonyme</label>
-        <input type="text" placeholder="z.B. alex_42" lang="de">
-        <input type="text" placeholder="p.ex. alex_42" lang="fr">
-      </div>
-      <div class="mockup-form-group">
-        <label lang="de">Passwort</label>
-        <label lang="fr">Mot de passe</label>
-        <input type="password" placeholder="••••••••">
-      </div>
-      <button class="mockup-button" lang="de">Anmelden</button>
-      <button class="mockup-button" lang="fr">Connexion</button>
-      <div class="mockup-divider">—</div>
-      <button class="mockup-button mockup-button-secondary" lang="de">Registrieren</button>
-      <button class="mockup-button mockup-button-secondary" lang="fr">S'inscrire</button>
-    </div>
-  </div>
-
   <div class="step"><div class="step-num">2</div><div class="step-body">
-    <h3><span lang="de">Stammdaten prüfen</span><span lang="fr">Vérifier les données de base</span></h3>
-    <p lang="de">Öffne den <strong>Verwaltung</strong>-Tab (5. Tab, <span class="ico ico-sm"><svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.5" fill="var(--surface)"/><circle cx="15" cy="16" r="2.5" fill="var(--surface)"/></svg></span>). Hier prüfst du, ob alle <strong>Stakeholder, Projekte, Tätigkeiten</strong> und die neuen <strong>5 Formate</strong> (Einzelarbeit, Meeting, Telefonat, Workshop, Sonstiges) vorhanden sind. Fehlende Einträge kannst du sofort hinzufügen — sie werden über Supabase Realtime live mit dem Team synced.</p>
-    <p lang="fr">Ouvrez l'onglet <strong>Gestion</strong> (5e onglet, <span class="ico ico-sm"><svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.5" fill="var(--surface)"/><circle cx="15" cy="16" r="2.5" fill="var(--surface)"/></svg></span>). Vous vérifiez que tous les <strong>mandants, projets, activités</strong> et les nouveaux <strong>5 formats</strong> (Travail individuel, Réunion, Appel téléphonique, Atelier, Autres) sont présents. Vous pouvez immédiatement ajouter les entrées manquantes — elles sont synchronisées en temps réel avec l'équipe via Supabase Realtime.</p>
+    <h3><span lang="de">Team beitreten</span><span lang="fr">Rejoindre une équipe</span></h3>
+    <p lang="de">Gehe zum <strong>Team-Tab</strong> (5. Tab, <span class="ico ico-sm"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a4 4 0 0 1 4 4V21"/></svg></span>). Gib einen 6-stelligen Invite-Code ein oder scanne einen QR-Code. Der Team-Schlüssel wird über verschlüsselte Verbindung ausgetauscht. Stammdaten (Stakeholder, Projekte, Tätigkeiten) synchronisieren sich automatisch.</p>
+    <p lang="fr">Allez à l'onglet <strong>Équipe</strong> (5e onglet, <span class="ico ico-sm"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a4 4 0 0 1 4 4V21"/></svg></span>). Entrez un code d'invitation de 6 caractères ou scannez un code QR. La clé d'équipe est échangée via une connexion chiffrée. Les données de base (mandants, projets, activités) se synchronisent automatiquement.</p>
   </div></div>
 
   <div class="step"><div class="step-num">3</div><div class="step-body">
     <h3><span lang="de">Timer starten</span><span lang="fr">Démarrer le chrono</span></h3>
-    <p lang="de">Im <strong>Timer</strong>-Tab (1. Tab, <span class="ico ico-sm"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="13" x2="15" y2="15"/><line x1="12" y1="3" x2="12" y2="5"/><line x1="10" y1="2" x2="14" y2="2"/></svg></span>): Wähle <strong>Stakeholder, Projekt, Tätigkeit und Format</strong> aus — das sind die <strong>5 Dimensionen</strong> pro Eintrag (neu: Format ist jetzt pflicht). Mehrere Stakeholder? <strong>Multi-Select</strong> aktivieren! Mit <span class="kbd">Ctrl</span>+<span class="kbd">K</span> Fuzzy-Search oder Manueller Eintrag starten. Die <strong>DayRing</strong> zeigt deinen Fortschritt zum 8:24-Ziel live an.</p>
-    <p lang="fr">Dans l'onglet <strong>Chrono</strong> (1er onglet, <span class="ico ico-sm"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="13" x2="15" y2="15"/><line x1="12" y1="3" x2="12" y2="5"/><line x1="10" y1="2" x2="14" y2="2"/></svg></span>) : sélectionnez <strong>mandant, projet, activité et format</strong> — ce sont les <strong>5 dimensions</strong> par entrée (nouveau : format est maintenant obligatoire). Plusieurs mandants ? Activer <strong>Multi-Sélection</strong> ! Avec <span class="kbd">Ctrl</span>+<span class="kbd">K</span> recherche floue ou démarrez une saisie manuelle. Le <strong>DayRing</strong> affiche votre progression vers l'objectif 8:24 en temps réel.</p>
+    <p lang="de">Im <strong>Timer</strong>-Tab (<span class="ico ico-sm"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="13" x2="15" y2="15"/><line x1="12" y1="3" x2="12" y2="5"/><line x1="10" y1="2" x2="14" y2="2"/></svg></span>): Wähle Stakeholder (Multi-Select), Projekt, Tätigkeit, Format und optional eine Notiz. Bis zu 8 parallele Task-Slots möglich. Starten über Schnellsuche-Bar oder Quick-Chips. Timer synchronisiert sich echtzeit-übergreifend über alle Geräte.</p>
+    <p lang="fr">Dans l'onglet <strong>Chrono</strong> (<span class="ico ico-sm"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="13" x2="15" y2="15"/><line x1="12" y1="3" x2="12" y2="5"/><line x1="10" y1="2" x2="14" y2="2"/></svg></span>) : sélectionnez mandant (multi-sélection), projet, activité, format et optionnellement une note. Jusqu'à 8 Task-Slots en parallèle. Lancez via la barre de recherche rapide ou Quick-Chips. Le chrono se synchronise en temps réel sur tous vos appareils.</p>
   </div></div>
-
-  <!-- Timer Mockup -->
-  <div class="mockup-section">
-    <div class="mockup-title" lang="de">Timer-Slot mit allen 5 Dimensionen (Cyber-Theme)</div>
-    <div class="mockup-title" lang="fr">Fente de minuterie avec les 5 dimensions (thème Cyber)</div>
-    <div class="mockup-timer">
-      <div class="mockup-timer-header" lang="de">▶ Timer starten</div>
-      <div class="mockup-timer-header" lang="fr">▶ Démarrer le chrono</div>
-      <div class="mockup-field-row">
-        <div class="mockup-field-group">
-          <label lang="de">Stakeholder</label>
-          <label lang="fr">Mandant</label>
-          <select>
-            <option lang="de">→ Wählen</option>
-            <option lang="fr">→ Sélectionner</option>
-          </select>
-        </div>
-        <div class="mockup-field-group">
-          <label lang="de">Projekt</label>
-          <label lang="fr">Projet</label>
-          <select>
-            <option lang="de">→ Wählen</option>
-            <option lang="fr">→ Sélectionner</option>
-          </select>
-        </div>
-      </div>
-      <div class="mockup-field-row">
-        <div class="mockup-field-group">
-          <label lang="de">Tätigkeit</label>
-          <label lang="fr">Activité</label>
-          <select>
-            <option lang="de">→ Wählen</option>
-            <option lang="fr">→ Sélectionner</option>
-          </select>
-        </div>
-        <div class="mockup-field-group">
-          <label lang="de">Format</label>
-          <label lang="fr">Format</label>
-          <select>
-            <option lang="de">Einzelarbeit</option>
-            <option lang="de">Meeting</option>
-            <option lang="de">Telefonat</option>
-            <option lang="de">Workshop</option>
-            <option lang="de">Sonstiges</option>
-            <option lang="fr">Travail individuel</option>
-            <option lang="fr">Réunion</option>
-            <option lang="fr">Appel téléphonique</option>
-            <option lang="fr">Atelier</option>
-            <option lang="fr">Autres</option>
-          </select>
-        </div>
-      </div>
-      <div class="mockup-field-row full">
-        <div class="mockup-checkbox-group">
-          <input type="checkbox" id="multi-stakeholder">
-          <label for="multi-stakeholder" lang="de">Mehrere Stakeholder aktivieren</label>
-          <label for="multi-stakeholder" lang="fr">Activer plusieurs mandants</label>
-        </div>
-      </div>
-      <div class="mockup-timer-display">
-        <div class="mockup-timer-value">00:13:47</div>
-        <div class="mockup-timer-label" lang="de">Laufend</div>
-        <div class="mockup-timer-label" lang="fr">En cours</div>
-      </div>
-      <div class="mockup-button-group">
-        <button class="mockup-button-start" lang="de">▶ Starten</button>
-        <button class="mockup-button-start" lang="fr">▶ Démarrer</button>
-        <button class="mockup-button-pause" lang="de">⏸ Pause</button>
-        <button class="mockup-button-pause" lang="fr">⏸ Pause</button>
-      </div>
-    </div>
-  </div>
 
   <div class="step"><div class="step-num">4</div><div class="step-body">
     <h3><span lang="de">Zeit buchen</span><span lang="fr">Enregistrer le temps</span></h3>
-    <p lang="de"><strong>■ Stopp</strong> drücken — der Eintrag wird sofort mit <strong>AES-GCM-Verschlüsselung</strong> (immer aktiv, nicht optional) auf den Supabase-Servern gespeichert. Alle Textfelder sind bereits client-seitig verschlüsselt, bevor sie gesendet werden. Der Eintrag erscheint sofort in der <strong>Einträge</strong>-Übersicht und die <strong>DayRing</strong> aktualisiert sich live. Zum Bearbeiten: Eintrag anklicken, Änderungen werden automatisch synced.</p>
-    <p lang="fr">Appuyez sur <strong>■ Stop</strong> — l'entrée est immédiatement sauvegardée avec <strong>chiffrement AES-GCM</strong> (toujours actif, non optionnel) sur les serveurs Supabase. Tous les champs de texte sont déjà chiffrés côté client avant d'être envoyés. L'entrée apparaît immédiatement dans l'aperçu <strong>Entrées</strong> et le <strong>DayRing</strong> se met à jour en temps réel. Pour modifier : cliquez sur l'entrée, les modifications sont auto-synchronisées.</p>
+    <p lang="de">Klick auf <strong>■</strong> (Stop) → Eintrag wird sofort gespeichert und synchronisiert. Oder nutze «Manuell Eintragen» für rückwirkende Einträge (Datum, Start, Ende). Mit dem «Feierabend»-Button werden alle laufenden Timer gestoppt.</p>
+    <p lang="fr">Cliquez sur <strong>■</strong> (Stop) → l'entrée est sauvegardée et synchronisée immédiatement. Ou utilisez «Saisie manuelle» pour des entrées antérieures (date, début, fin). Le bouton «Fin de journée» arrête tous les chrono actifs.</p>
   </div></div>
 
   <div class="step"><div class="step-num">5</div><div class="step-body">
-    <h3><span lang="de">Team beitreten</span><span lang="fr">Rejoindre l'équipe</span></h3>
-    <p lang="de">Öffne den <strong>Team</strong>-Tab (4. Tab, <span class="ico ico-sm"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a4 4 0 0 1 4 4V21"/></svg></span>) → <strong>Team beitreten</strong>. Gib den <strong>6-stelligen Invite-Code</strong> ein oder scanne den QR-Code. Danach siehst du alle Team-Daten, das Live-Dashboard mit Tagesübersicht, Auslastung pro Person, Stakeholder × Projekt-Matrix, Timeline und Excel-Export. Alle neuen Stammdaten vom Team werden automatisch zu dir synced.</p>
-    <p lang="fr">Ouvrez l'onglet <strong>Équipe</strong> (4e onglet, <span class="ico ico-sm"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a4 4 0 0 1 4 4V21"/></svg></span>) → <strong>Rejoindre l'équipe</strong>. Saisissez le <strong>code d'invitation à 6 chiffres</strong> ou scannez le code QR. Ensuite, vous voyez toutes les données de l'équipe, le tableau de bord en temps réel avec aperçu quotidien, charge par personne, matrice mandant × projet, chronologie et export Excel. Toutes les nouvelles données de base de l'équipe sont automatiquement synchronisées.</p>
+    <h3><span lang="de">Dashboard & Auswertung nutzen</span><span lang="fr">Utiliser le tableau de bord</span></h3>
+    <p lang="de"><strong>Dashboard-Tab</strong> (<span class="ico ico-sm"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>): KPIs, Zeitverlauf-Chart, Stakeholder × Projekt Heatmap. <strong>Team-Tab</strong>: Tagesübersicht, Projekt × Person Matrix, Workload-Charts. Erkenne schnell, wie die Zeit verteilt ist.</p>
+    <p lang="fr"><strong>Onglet Tableau de bord</strong> (<span class="ico ico-sm"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>) : KPIs, graphique de progression, heatmap mandant × projet. <strong>Onglet Équipe</strong> : aperçu quotidien, matrice projet × personne, graphiques de charge. Voyez rapidement comment le temps est réparti.</p>
   </div></div>
 
   <div class="tip">
-    <span lang="de"><strong>⌨️ Tastenkürzel:</strong> <span class="kbd">Space</span> = Starten/Pause · <span class="kbd">S</span> = Speichern · <span class="kbd">N</span> = Neuer Eintrag · <span class="kbd">Tab</span> = Seite wechseln · <span class="kbd">F</span> = Filtern · <span class="kbd">Q</span> = Feierabend · <span class="kbd">?</span> = Alle Shortcuts · <span class="kbd">Esc</span> = Schließen</span>
-    <span lang="fr"><strong>⌨️ Raccourcis clavier:</strong> <span class="kbd">Space</span> = Démarrer/Pause · <span class="kbd">S</span> = Enregistrer · <span class="kbd">N</span> = Nouvelle entrée · <span class="kbd">Tab</span> = Changer de page · <span class="kbd">F</span> = Filtrer · <span class="kbd">Q</span> = Fin de journée · <span class="kbd">?</span> = Tous les raccourcis · <span class="kbd">Esc</span> = Fermer</span>
+    <span lang="de"><strong>Hinweis:</strong> Dein Passwort ist dein Verschlüsselungsschlüssel. Speichere es sicher auf. Wenn du es verlierst, können deine Daten nicht wiederhergestellt werden.</span>
+    <span lang="fr"><strong>Important :</strong> Votre mot de passe est votre clé de chiffrement. Gardez-le en sécurité. Si vous le perdez, vos données ne peuvent pas être récupérées.</span>
   </div>
 
-  <!-- Tabs -->
+  <!-- Die 5 App-Bereiche -->
   <div class="section-label"><h2><span lang="de">Die 5 App-Bereiche</span><span lang="fr">Les 5 sections</span></h2></div>
   <table class="tab-table" lang="de">
     <thead><tr><th>Tab</th><th>Was du dort machst</th></tr></thead>
     <tbody>
-      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="13" x2="15" y2="15"/><line x1="12" y1="3" x2="12" y2="5"/><line x1="10" y1="2" x2="14" y2="2"/></svg></span> <strong>Timer</strong></td><td>Timers starten/stoppen mit 5 Dimensionen, Manueller Eintrag für vergessene Zeiten, DayRing zeigt 8:24-Progress, Quick-Shortcuts für gepinnte Task-Combos.</td></tr>
-      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="19" y2="6"/><line x1="8" y1="12" x2="19" y2="12"/><line x1="8" y1="18" x2="19" y2="18"/><circle cx="5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1" fill="currentColor" stroke="none"/></svg></span> <strong>Einträge</strong></td><td>Alle Einträge (verschlüsselt), nach Datum/Projekt filtern, bearbeiten, CSV-Export mit Spalten: Datum, Stakeholder, Projekt, Format, Tätigkeit, Von, Bis, Dauer, Notiz, Wochentag.</td></tr>
-      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span> <strong>Dashboard</strong></td><td>KPI-Karten (Soll/Ist), Nach Tätigkeit (Bars), Nach Format (Bars), Zeitverlauf (Timeline), Stakeholder × Projekt (Heatmap-Matrix). Prev/Next-Navigation durch Tage/Wochen/Monate.</td></tr>
-      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.5" fill="var(--surface)"/><circle cx="15" cy="16" r="2.5" fill="var(--surface)"/></svg></span> <strong>Verwaltung</strong></td><td>Stammdaten (Stakeholder, Projekte, Tätigkeiten, 5 Formate), CSV-Import mit Fingerprint-Deduplication, Backup & Wiederherstellung (HTML-Backup), JSON-Export.</td></tr>
-      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a4 4 0 0 1 4 4V21"/></svg></span> <strong>Team</strong></td><td>Team erstellen/beitreten mit 6-char Invite-Code oder QR, Tagesübersicht (Daily Heatmap), Stakeholder × Person, Projekt × Person, Auslastung pro Person, Zeitverlauf, Excel-Export.</td></tr>
+      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="13" x2="15" y2="15"/><line x1="12" y1="3" x2="12" y2="5"/><line x1="10" y1="2" x2="14" y2="2"/></svg></span> <strong>Timer</strong></td><td>Task-Slots starten/stoppen, Schnellsuche, Quick-Chips. Multi-Select für Stakeholder. Bis zu 8 parallele Timer.</td></tr>
+      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="19" y2="6"/><line x1="8" y1="12" x2="19" y2="12"/><line x1="8" y1="18" x2="19" y2="18"/><circle cx="5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1" fill="currentColor" stroke="none"/></svg></span> <strong>Einträge</strong></td><td>Zeiten ansehen, suchen, filtern, bearbeiten, löschen. Manuell eintragen für rückwirkende Daten.</td></tr>
+      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span> <strong>Dashboard</strong></td><td>KPIs, Heatmap, Zeitverlauf-Chart, Top-Projekte. Persönliche Auswertungen.</td></tr>
+      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.5" fill="var(--surface)"/><circle cx="15" cy="16" r="2.5" fill="var(--surface)"/></svg></span> <strong>Verwaltung</strong></td><td>Stammdaten verwalten, CSV-Export, JSON-Backup, Einstellungen, E2E-Verschlüsselung.</td></tr>
+      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a4 4 0 0 1 4 4V21"/></svg></span> <strong>Team</strong></td><td>Team erstellen/beitreten, Zeiten aller Mitglieder, QR-Code, Datenfreigabe.</td></tr>
     </tbody>
   </table>
   <table class="tab-table" lang="fr">
     <thead><tr><th>Onglet</th><th>Ce que vous y faites</th></tr></thead>
     <tbody>
-      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="13" x2="15" y2="15"/><line x1="12" y1="3" x2="12" y2="5"/><line x1="10" y1="2" x2="14" y2="2"/></svg></span> <strong>Chrono</strong></td><td>Démarrer/arrêter les minuteries avec 5 dimensions, saisie manuelle pour heures oubliées, DayRing affiche progression 8:24, raccourcis rapides pour tâches épinglées.</td></tr>
-      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="19" y2="6"/><line x1="8" y1="12" x2="19" y2="12"/><line x1="8" y1="18" x2="19" y2="18"/><circle cx="5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1" fill="currentColor" stroke="none"/></svg></span> <strong>Entrées</strong></td><td>Toutes les entrées (chiffrées), filtrer par date/projet, modifier, export CSV avec colonnes : Date, Mandant, Projet, Format, Activité, De, À, Durée, Note, Jour semaine.</td></tr>
-      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span> <strong>Tableau de bord</strong></td><td>Cartes KPI (Objectif/Réel), Par activité (Barres), Par format (Barres), Chronologie (Timeline), Mandant × Projet (Heatmap-Matrice). Navigation Prev/Next par jour/semaine/mois.</td></tr>
-      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.5" fill="var(--surface)"/><circle cx="15" cy="16" r="2.5" fill="var(--surface)"/></svg></span> <strong>Gestion</strong></td><td>Données de base (mandants, projets, activités, 5 formats), import CSV avec déduplication empreinte digitale, Sauvegarde & Restauration (Backup HTML), export JSON.</td></tr>
-      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a4 4 0 0 1 4 4V21"/></svg></span> <strong>Équipe</strong></td><td>Créer/rejoindre équipe avec code 6 chars ou QR, aperçu quotidien (Heatmap quotidienne), Mandant × Personne, Projet × Personne, charge par personne, chronologie, export Excel.</td></tr>
+      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="13" x2="15" y2="15"/><line x1="12" y1="3" x2="12" y2="5"/><line x1="10" y1="2" x2="14" y2="2"/></svg></span> <strong>Chrono</strong></td><td>Démarrer/arrêter les Task-Slots, recherche rapide, Quick-Chips. Multi-sélection mandant. Jusqu'à 8 chrono en parallèle.</td></tr>
+      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="19" y2="6"/><line x1="8" y1="12" x2="19" y2="12"/><line x1="8" y1="18" x2="19" y2="18"/><circle cx="5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1" fill="currentColor" stroke="none"/></svg></span> <strong>Entrées</strong></td><td>Voir, rechercher, filtrer, modifier, supprimer. Saisie manuelle pour données antérieures.</td></tr>
+      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span> <strong>Tableau de bord</strong></td><td>KPIs, heatmap, chronologie, top projets. Analyses personnelles.</td></tr>
+      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.5" fill="var(--surface)"/><circle cx="15" cy="16" r="2.5" fill="var(--surface)"/></svg></span> <strong>Gestion</strong></td><td>Gérer données de base, export CSV, sauvegarde JSON, paramètres, chiffrement E2E.</td></tr>
+      <tr><td><span class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a4 4 0 0 1 4 4V21"/></svg></span> <strong>Équipe</strong></td><td>Créer/rejoindre une équipe, aperçu temps de tous, code QR, partage de données.</td></tr>
     </tbody>
   </table>
 
-  <!-- Cloud & Sicherheit -->
-  <div class="section-label"><h2><span lang="de">Cloud & Sicherheit</span><span lang="fr">Cloud & Sécurité</span></h2></div>
-  <p style="font-size:0.9rem;color:var(--text-mid);margin-bottom:12px;" lang="de">Deine Daten werden automatisch in Supabase (Cloud) gespeichert und sind <strong>IMMER mit AES-GCM E2E-Verschlüsselung geschützt</strong> (nicht optional). Alle Textfelder werden client-seitig verschlüsselt, bevor sie übermittelt werden. Team-Sync erfolgt über Supabase Realtime in Echtzeit. Zusätzlich empfohlen:</p>
-  <p style="font-size:0.9rem;color:var(--text-mid);margin-bottom:12px;" lang="fr">Vos données sont automatiquement stockées dans Supabase (Cloud) et sont <strong>TOUJOURS protégées par chiffrement E2E AES-GCM</strong> (non optionnel). Tous les champs de texte sont chiffrés côté client avant transmission. La synchronisation d'équipe se fait en temps réel via Supabase Realtime. En complément :</p>
+  <!-- Backup & Sicherheit -->
+  <div class="section-label"><h2><span lang="de">Backup & Sicherheit</span><span lang="fr">Sauvegarde & Sécurité</span></h2></div>
+  <p style="font-size:0.9rem;color:var(--text-mid);margin-bottom:12px;" lang="de">Alle Daten sind E2E-verschlüsselt (AES-256-GCM). Automatische Synchronisation über Supabase Cloud. Zusätzlich empfohlen:</p>
+  <p style="font-size:0.9rem;color:var(--text-mid);margin-bottom:12px;" lang="fr">Toutes les données sont E2E-chiffrées (AES-256-GCM). Synchronisation automatique via Supabase Cloud. En complément :</p>
   <div class="step">
     <div class="step-num" style="background:var(--navy);color:white;font-size:1rem;">
       <span class="ico" style="margin:0;"><svg viewBox="0 0 24 24" style="stroke:white;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>
     </div>
     <div class="step-body">
-      <h3><span lang="de">Lokales Backup</span><span lang="fr">Sauvegarde locale</span></h3>
-      <p lang="de"><strong>Verwaltung</strong> → <strong>«Backup & Wiederherstellung»</strong>. Download eines HTML-Backups aller verschlüsselten Einträge und Stammdaten für Offline-Zugriff, Archivierung oder schnelle Wiederherstellung.</p>
-      <p lang="fr"><strong>Gestion</strong> → <strong>«Sauvegarde & Restauration»</strong>. Téléchargez une sauvegarde HTML de tous les entrées chiffrées et données de base pour accès hors ligne, archivage ou restauration rapide.</p>
+      <h3><span lang="de">JSON-Backup exportieren</span><span lang="fr">Exporter une sauvegarde JSON</span></h3>
+      <p lang="de"><strong>Verwaltung</strong> → «JSON-Backup exportieren». Enthält alle verschlüsselten Einträge, Stammdaten und Einstellungen. Speichere es offline an einem sicheren Ort.</p>
+      <p lang="fr"><strong>Gestion</strong> → «Exporter sauvegarde JSON». Contient tous les entrées chiffrées, données de base et paramètres. Sauvegardez-le hors ligne à un endroit sûr.</p>
     </div>
   </div>
 
   <!-- Nächste Schritte -->
   <div class="section-label"><h2><span lang="de">Nächste Schritte</span><span lang="fr">Prochaines étapes</span></h2></div>
   <div class="next-grid" lang="de">
-    <div class="next-item"><strong><span class="ico ico-sm"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span> Dashboard</strong>Tab 3: KPI-Karten, Format- & Tätigkeits-Bars, Stakeholder×Projekt-Heatmap für Auswertungen.</div>
-    <div class="next-item"><strong><span class="ico ico-sm"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a4 4 0 0 1 4 4V21"/></svg></span> Team</strong>Tab 4: Mit 6-char Invite-Code oder QR beitreten, Live-Sync, Auslastungs-Dashboard.</div>
-    <div class="next-item"><strong><span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span> Design</strong>Themes: «Cyber» (dunkel/neon) und «Light»-Mode. Sprache: DE/FR. PWA installierbar für Offline.</div>
+    <div class="next-item"><strong><span class="ico ico-sm"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span> Dashboard</strong>Tab 3: Visualisiere deine Zeitverteilung, Heatmaps und Trends auf einen Blick.</div>
+    <div class="next-item"><strong><span class="ico ico-sm"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a4 4 0 0 1 4 4V21"/></svg></span> Team einladen</strong>Tab 5: Share dein Invite-Code oder QR-Code mit Kollegen. Echtzeit-Sync wird aktiviert.</div>
+    <div class="next-item"><strong><span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span> Multi-Device</strong>Nutze denselben Account auf Handy und Desktop. Alle Daten synchronisieren in Echtzeit.</div>
   </div>
   <div class="next-grid" lang="fr">
-    <div class="next-item"><strong><span class="ico ico-sm"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span> Tableau de bord</strong>Onglet 3 : cartes KPI, barres Format & Activité, heatmap Mandant×Projet pour analyses.</div>
-    <div class="next-item"><strong><span class="ico ico-sm"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a4 4 0 0 1 4 4V21"/></svg></span> Équipe</strong>Onglet 4 : rejoindre avec code 6 chars ou QR, sync temps réel, tableau de bord charge.</div>
-    <div class="next-item"><strong><span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span> Design</strong>Thèmes : «Cyber» (sombre/néon) et mode «Light». Langues : DE/FR. PWA installable hors ligne.</div>
+    <div class="next-item"><strong><span class="ico ico-sm"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span> Tableau de bord</strong>Onglet 3 : visualisez votre répartition du temps, heatmaps et tendances en un coup d'oeil.</div>
+    <div class="next-item"><strong><span class="ico ico-sm"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a4 4 0 0 1 4 4V21"/></svg></span> Inviter l'équipe</strong>Onglet 5 : partagez votre code d'invitation ou code QR avec les collègues. Sync en temps réel activée.</div>
+    <div class="next-item"><strong><span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span> Multi-appareil</strong>Utilisez le même compte sur téléphone et bureau. Toutes les données se synchronisent en temps réel.</div>
   </div>
-
-  <!-- Was ist neu in V1.0 -->
-  <div class="section-label"><h2><span lang="de">Was ist neu in V1.0?</span><span lang="fr">Quoi de neuf en V1.0 ?</span></h2></div>
-  <p style="font-size:0.9rem;color:var(--text-mid);margin-bottom:16px;" lang="de">Zeiterfassung V1.0 bringt wichtige Improvements zur V1.0:</p>
-  <p style="font-size:0.9rem;color:var(--text-mid);margin-bottom:16px;" lang="fr">Zeiterfassung V1.0 apporte des améliorations importantes par rapport à V1.0 :</p>
-  <div class="next-grid" lang="de">
-    <div class="next-item"><strong>5 Data-Dimensionen</strong>Stakeholder (Multi-Select), Projekt, Tätigkeit, Format, Notiz — strukturierte Erfassung.</div>
-    <div class="next-item"><strong>Format-Dimension</strong>5 vordefinierte Formate: Einzelarbeit, Meeting, Telefonat, Workshop, Sonstiges.</div>
-    <div class="next-item"><strong>Multi-Stakeholder</strong>Mehrere Stakeholder pro Eintrag gleichzeitig selektierbar.</div>
-    <div class="next-item"><strong>Passwort-basierte E2E</strong>Passwort deriviert Verschlüsselungsschlüssel automatisch, kein Master-Password nötig.</div>
-    <div class="next-item"><strong>AES-GCM immer aktiv</strong>Alle Einträge IMMER verschlüsselt (nicht optional), client-seitig vor Upload.</div>
-    <div class="next-item"><strong>Quick-Shortcuts</strong>Gepinnte Task-Kombinationen für sofortigen Timer-Start ohne Menüs.</div>
-    <div class="next-item"><strong>DayRing Totals</strong>Heatmap-Wanduhr zeigt täglich aggregierte Zeiten aller Stakeholder.</div>
-    <div class="next-item"><strong>Improved UI/UX</strong>bessere Keyboard-Accessibility, ARIA-Labels, responsive Design.</div>
-    <div class="next-item"><strong>HTML-Backup</strong>«Backup & Wiederherstellung» → HTML-Files statt JSON für sichere Offline-Archive.</div>
-    <div class="next-item"><strong>GitHub Pages URL</strong>https://vob0x.github.io/Zeiterfassung (direkt über GitHub gehostet).</div>
-  </div>
-  <div class="next-grid" lang="fr">
-    <div class="next-item"><strong>5 Dimensions données</strong>Mandant (Multi-Sélection), Projet, Activité, Format, Note — saisie structurée.</div>
-    <div class="next-item"><strong>Dimension Format</strong>5 formats prédéfinis : Travail individuel, Réunion, Appel téléphonique, Atelier, Autres.</div>
-    <div class="next-item"><strong>Multi-Mandant</strong>Plusieurs mandants par entrée sélectionnables simultanément.</div>
-    <div class="next-item"><strong>E2E basée mot de passe</strong>Le mot de passe dérive la clé de chiffrement automatiquement, pas besoin de Master-Password.</div>
-    <div class="next-item"><strong>AES-GCM toujours actif</strong>Tous les entrées TOUJOURS chiffrées (non optionnel), côté client avant upload.</div>
-    <div class="next-item"><strong>Raccourcis rapides</strong>Combinaisons de tâches épinglées pour démarrage instantané sans menus.</div>
-    <div class="next-item"><strong>Totals DayRing</strong>Heatmap horloge murale affiche heures agrégées quotidiennes de tous mandants.</div>
-    <div class="next-item"><strong>UI/UX améliorée</strong>Meilleure accessibilité clavier, étiquettes ARIA, design responsive.</div>
-    <div class="next-item"><strong>Sauvegarde HTML</strong>«Sauvegarde & Restauration» → fichiers HTML au lieu JSON pour archives hors ligne sécurisées.</div>
-    <div class="next-item"><strong>URL GitHub Pages</strong>https://vob0x.github.io/Zeiterfassung (hébergé directement via GitHub).</div>
-  </div>
-
 </main>
 
 <footer class="page-footer">
