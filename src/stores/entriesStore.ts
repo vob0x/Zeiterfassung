@@ -207,17 +207,19 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
           // Uses a CSV-derived lookup (embedded at build time) to recover
           // plaintext for entries where decryption fails.
           const failedCount = _batchDecryptFail;
+          console.warn(`[ReEncrypt] Debug: failedCount=${failedCount}, hasKey=${hasEncryptionKey()}, entries=${data.length}`);
           if (failedCount > 0 && hasEncryptionKey()) {
             const REENCRYPT_KEY = 'ze_reencrypt_done_v4';
             const alreadyDone = localStorage.getItem(REENCRYPT_KEY);
+            console.warn(`[ReEncrypt] Debug: REENCRYPT_KEY=${REENCRYPT_KEY}, alreadyDone=${alreadyDone}`);
             if (!alreadyDone) {
-              console.info(`[ReEncrypt] ${failedCount} fields failed — running CSV-based restore + re-encryption`);
+              console.warn(`[ReEncrypt] ${failedCount} fields failed — running CSV-based restore + re-encryption`);
 
               // CSV-derived lookup: "date|HH:MM|HH:MM" → [stakeholder, projekt, format, taetigkeit, notiz]
               let csvLookup: Record<string, string[]> = {};
               try {
                 csvLookup = (await import('@/data/csvRestore.json')).default as any;
-                console.info(`[ReEncrypt] CSV lookup loaded: ${Object.keys(csvLookup).length} entries`);
+                console.warn(`[ReEncrypt] CSV lookup loaded: ${Object.keys(csvLookup).length} entries`);
               } catch (e) {
                 console.warn('[ReEncrypt] CSV lookup not available — will clean unrecoverable fields');
               }
@@ -288,10 +290,10 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
                 }
                 // Log progress for long batches
                 if (data.length > 100) {
-                  console.info(`[ReEncrypt] Progress: ${Math.min(i + 50, data.length)}/${data.length} entries processed`);
+                  console.warn(`[ReEncrypt] Progress: ${Math.min(i + 50, data.length)}/${data.length} entries processed`);
                 }
               }
-              console.info(`[ReEncrypt] Done: ${reEncrypted} re-encrypted, ${restoredFromCSV} restored from CSV, ${cleaned} unrecoverable`);
+              console.warn(`[ReEncrypt] Done: ${reEncrypted} re-encrypted, ${restoredFromCSV} restored from CSV, ${cleaned} unrecoverable`);
               localStorage.setItem(REENCRYPT_KEY, Date.now().toString());
 
               // Re-fetch after migration to get clean data
@@ -423,7 +425,7 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
         if (teamState.connected && teamState.team?.id && hasTeamKey() && hasEncryptionKey()) {
           const TEAM_REENCRYPT_KEY = `ze_team_reencrypt_${teamState.team.id}`;
           if (!localStorage.getItem(TEAM_REENCRYPT_KEY)) {
-            console.info('[ReEncrypt] First fetch with Team Key — re-encrypting own data for team visibility');
+            console.warn('[ReEncrypt] First fetch with Team Key — re-encrypting own data for team visibility');
             // Fire-and-forget: don't block the UI. Set flag only after success.
             reEncryptEntriesForTeam().then(() => {
               localStorage.setItem(TEAM_REENCRYPT_KEY, Date.now().toString());
@@ -1224,7 +1226,7 @@ export async function reEncryptEntriesForTeam(): Promise<void> {
 
     if (error || !data || data.length === 0) return;
 
-    console.info(`[ReEncrypt] Re-encrypting ${data.length} entries with Team Key…`);
+    console.warn(`[ReEncrypt] Re-encrypting ${data.length} entries with Team Key…`);
 
     // 2. Decrypt → re-encrypt in chunks to avoid overwhelming the browser
     const CHUNK = 50;
@@ -1278,7 +1280,7 @@ export async function reEncryptEntriesForTeam(): Promise<void> {
       console.warn(`[ReEncrypt] Skipped ${skippedTotal} entries (decryption failed — preserved original ciphertext)`);
     }
 
-    console.info(`[ReEncrypt] Re-encryption complete: ${reEncryptedTotal} entries updated, ${skippedTotal} skipped`);
+    console.warn(`[ReEncrypt] Re-encryption complete: ${reEncryptedTotal} entries updated, ${skippedTotal} skipped`);
   } catch (e) {
     console.warn('[ReEncrypt] Re-encryption failed:', e);
   }
