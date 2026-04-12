@@ -207,11 +207,9 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
           // Uses a CSV-derived lookup (embedded at build time) to recover
           // plaintext for entries where decryption fails.
           const failedCount = _batchDecryptFail;
-          console.warn(`[ReEncrypt] Debug: failedCount=${failedCount}, hasKey=${hasEncryptionKey()}, entries=${data.length}`);
           if (failedCount > 0 && hasEncryptionKey()) {
             const REENCRYPT_KEY = 'ze_reencrypt_done_v4';
             const alreadyDone = localStorage.getItem(REENCRYPT_KEY);
-            console.warn(`[ReEncrypt] Debug: REENCRYPT_KEY=${REENCRYPT_KEY}, alreadyDone=${alreadyDone}`);
             if (!alreadyDone) {
               console.warn(`[ReEncrypt] ${failedCount} fields failed — running CSV-based restore + re-encryption`);
 
