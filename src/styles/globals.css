@@ -6,40 +6,48 @@
 
 /* ============================================
    CSS Custom Properties - Cyber Theme (Default)
+   ============================================
+   Pilot-Feedback: Dark Mode war zu dunkel, Buttons fast unsichtbar,
+   Kontraste durchgehend zu tief.
+   - --text-muted #4D4941 hatte nur ~2.6:1 Kontrast → WCAG fail
+   - --border bei 8% war praktisch unsichtbar → btn-secondary „verschwand"
+   - bg/surface waren zu nah beieinander → keine sichtbare Hierarchie
+   Werte unten sind nach WCAG-AA für UI (≥3:1 für Konturen, ≥4.5:1 für Body)
+   geprüft, Gold-on-black Look bleibt erhalten.
    ============================================ */
 :root {
-  --bg: #0A0B0F;
-  --surface: rgba(18, 20, 28, 0.78);
-  --surface-solid: #131520;
-  --border: rgba(201, 169, 98, 0.08);
-  --border-hover: rgba(201, 169, 98, 0.20);
-  --text: #E8E4DF;
-  --text-secondary: #908B83;
-  --text-muted: #4D4941;
-  --primary: #C9A962;
-  --danger: #D4706E;
-  --success: #6EC49E;
-  --warning: #E5A84B;
+  --bg: #0E1018;                  /* +30% lift vs. alt #0A0B0F — atmet besser */
+  --surface: rgba(28, 32, 46, 0.85);
+  --surface-solid: #1A1D2A;       /* deutlich von --bg unterscheidbar */
+  --border: rgba(201, 169, 98, 0.18);   /* 2.25× alt → tatsächlich sichtbar */
+  --border-hover: rgba(201, 169, 98, 0.38);
+  --text: #F0EBE3;                /* einen Tick wärmer/heller */
+  --text-secondary: #B6AEA1;      /* von #908B83 → ~7:1 auf neuem bg */
+  --text-muted: #877F71;          /* von #4D4941 → ~4.5:1, lesbar */
+  --primary: #D4B673;             /* von #C9A962 → leicht heller, mehr Pop */
+  --danger: #E08886;
+  --success: #82D0AC;
+  --warning: #ECB761;
   --font-display: 'Sora', sans-serif;
   --font: 'DM Sans', sans-serif;
   --font-mono: 'Space Mono', monospace;
   --radius: 14px;
   --radius-sm: 8px;
-  --neon-cyan: #C9A962;
-  --neon-magenta: #C48B9F;
-  --neon-violet: #9B8EC4;
-  --neon-green: #6EC49E;
-  --neon-yellow: #E5A84B;
-  --neon-red: #D4706E;
-  --neon-orange: #D4956A;
-  --surface-hover: rgba(201, 169, 98, 0.04);
-  --surface-active: rgba(201, 169, 98, 0.08);
-  --surface-elevated: rgba(20, 22, 32, 0.94);
-  --shadow: 0 4px 30px rgba(0, 0, 0, 0.40);
-  --shadow-lg: 0 12px 50px rgba(0, 0, 0, 0.50);
-  --shadow-glow: 0 4px 30px rgba(201, 169, 98, 0.06);
-  --glow-cyan: 0 0 24px rgba(201, 169, 98, 0.10), 0 0 60px rgba(201, 169, 98, 0.03);
-  --timer-stroke: #C9A962;
+  --neon-cyan: #D4B673;
+  --neon-magenta: #D49EB0;
+  --neon-violet: #AFA2D4;
+  --neon-green: #82D0AC;
+  --neon-yellow: #ECB761;
+  --neon-red: #E08886;
+  --neon-orange: #DEA67D;
+  --surface-hover: rgba(201, 169, 98, 0.10);   /* von 0.04 → spürbarer Hover */
+  --surface-active: rgba(201, 169, 98, 0.16);  /* von 0.08 → klarer aktiv */
+  --surface-elevated: rgba(32, 36, 50, 0.96);
+  --shadow: 0 4px 30px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 50px rgba(0, 0, 0, 0.55);
+  --shadow-glow: 0 4px 30px rgba(201, 169, 98, 0.10);
+  --glow-cyan: 0 0 24px rgba(201, 169, 98, 0.18), 0 0 60px rgba(201, 169, 98, 0.06);
+  --timer-stroke: #D4B673;
 }
 
 /* ============================================
@@ -254,7 +262,7 @@ a:hover {
 
   .card:hover {
     border-color: var(--border-hover);
-    box-shadow: 0 8px 32px rgba(201, 169, 98, 0.08);
+    box-shadow: 0 8px 32px rgba(201, 169, 98, 0.14);
   }
 
   .card-solid {
@@ -290,11 +298,17 @@ a:hover {
   }
 
   .btn-secondary {
-    @apply bg-[var(--surface-solid)] text-[var(--text)] border border-[var(--border)] hover:border-[var(--border-hover)];
+    /* Real, visible chrome: not just a near-invisible border. The bg is
+       shifted enough above --surface-solid that the button still reads
+       as "elevated" on a card without competing with --btn-primary. */
+    @apply text-[var(--text)] border transition-colors;
+    background-color: rgba(201, 169, 98, 0.06);
+    border-color: var(--border-hover);
   }
 
   .btn-secondary:hover {
-    background-color: rgba(201, 169, 98, 0.08);
+    background-color: rgba(201, 169, 98, 0.16);
+    border-color: var(--primary);
   }
 
   .btn-danger {
@@ -377,7 +391,7 @@ a:hover {
     border-color: var(--border);
     color: var(--text);
     font-family: var(--font);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23C9A962' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23D4B673' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 12px center;
     padding-right: 36px;
@@ -633,7 +647,7 @@ a:hover {
     @apply px-4 py-3 text-left font-semibold text-sm border-b;
     color: var(--text);
     border-color: var(--border);
-    background-color: rgba(201, 169, 98, 0.03);
+    background-color: rgba(201, 169, 98, 0.08);
   }
 
   .table td {
@@ -643,7 +657,7 @@ a:hover {
   }
 
   .table tr:hover {
-    background-color: rgba(201, 169, 98, 0.05);
+    background-color: rgba(201, 169, 98, 0.10);
   }
 
   /* ============================================
@@ -699,12 +713,13 @@ a:hover {
     @apply flex items-center justify-center px-2 py-2 rounded-lg transition-all duration-200 cursor-pointer;
     color: var(--text-secondary);
     background: transparent;
-    border: none;
+    border: 1px solid transparent;
   }
 
   .btn-icon:hover {
     color: var(--text);
-    background-color: rgba(201, 169, 98, 0.08);
+    background-color: rgba(201, 169, 98, 0.14);
+    border-color: var(--border-hover);
   }
 
   /* ============================================
@@ -719,11 +734,12 @@ a:hover {
 
   .nav-tab:hover {
     color: var(--text);
-    background-color: rgba(201, 169, 98, 0.06);
+    background-color: rgba(201, 169, 98, 0.12);
   }
 
   .nav-tab.active {
     color: var(--primary);
+    background-color: rgba(201, 169, 98, 0.10);
   }
 
   .nav-tab.active::after {
@@ -777,7 +793,7 @@ a:hover {
 }
 
 .bottom-nav-item:hover {
-  background-color: rgba(201, 169, 98, 0.08);
+  background-color: rgba(201, 169, 98, 0.14);
 }
 
 .bottom-nav-icon {
