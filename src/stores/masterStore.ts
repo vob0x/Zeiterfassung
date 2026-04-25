@@ -73,17 +73,98 @@ async function syncListToSupabase(
   }
 
   try {
-    // Delete existing rows first (encrypted values differ each time due to random IV)
-    const { error: delErr } = await supabaseClient.from(table).delete().eq('user_id', userId);
-    if (delErr) {
+    // Diff/reconcile pattern (instead of DELETE-ALL + INSERT-ALL):
+    //   1. Read what the caller currently OWNS (eq user_id)
+    //   2. Decrypt each row's name to a {name → id} map
+    //   3. INSERT names in `names` that aren't already in own namespace
+    //   4. DELETE rows in own namespace whose name isn't in `names`
+    //
+    // Why this matters:
+    //   - In team mode, `names` is often the team-merged list (state.xxx).
+    //     A blanket DELETE-ALL + INSERT-ALL under our user_id duplicated
+    //     teammate values into our namespace and ballooned Supabase egress.
+    //   - This pattern only ever touches our OWN rows and only writes the
+    //     deltas — typical sync transfers a handful of rows, not the whole
+    //     list every time.
+    //   - Teammate rows are never touched (RLS would block them anyway,
+    //     except for admin DELETE which only the targeted helpers use).
+    const { data: ownRows, error: selErr } = await supabaseClient
+      .from(table)
+      .select('id, name')
+      .eq('user_id', userId);
+    if (selErr) {
       _syncInProgress.set(lockKey, false);
-      return; // Auth issue — don't attempt insert
+      return;
     }
 
-    // Insert fresh — only if there's data to insert (empty list = intentional delete-all)
-    if (names.length > 0) {
+    const ownByName = new Map<string, string>(); // decrypted name → row id
+    for (const row of ownRows || []) {
+      const decrypted = await decryptFieldSmart(row.name);
+      // Only keep the FIRST occurrence — drop duplicates as a side effect of sync
+      if (decrypted && !ownByName.has(decrypted)) {
+        ownByName.set(decrypted, row.id);
+      }
+    }
+
+    const wantedSet = new Set(names);
+
+    // In team mode, also collect names owned by teammates so we don't
+    // create cross-namespace duplicates (the source of the historical
+    // egress inflation + reappearing-after-delete bug).
+    const teammateOwnedNames = new Set<string>();
+    const inTeam = useTeamStore.getState().connected;
+    if (inTeam) {
+      const { data: allRows, error: allErr } = await supabaseClient
+        .from(table)
+        .select('user_id, name');
+      if (!allErr && allRows) {
+        for (const row of allRows as any[]) {
+          if (row.user_id === userId) continue;
+          const decrypted = await decryptFieldSmart(row.name);
+          if (decrypted) teammateOwnedNames.add(decrypted);
+        }
+      }
+    }
+
+    // Rows to add: names we want but don't already own AND that no teammate owns.
+    // Skipping teammate-owned names is safe because the merged read already
+    // surfaces them in everyone's UI — there's no point in inserting a copy.
+    const toInsert = names
+      .map((name, idx) => ({ name, idx }))
+      .filter(({ name }) => !ownByName.has(name) && !teammateOwnedNames.has(name));
+
+    // Rows to delete: own rows whose name we no longer want, plus duplicate
+    // own rows for the same name (we dedupe to one canonical row).
+    const toDeleteIds: string[] = [];
+    const seen = new Set<string>();
+    for (const row of ownRows || []) {
+      const decrypted = await decryptFieldSmart(row.name);
+      if (!decrypted) {
+        toDeleteIds.push(row.id); // Unrecoverable cipher — drop it
+        continue;
+      }
+      if (!wantedSet.has(decrypted)) {
+        toDeleteIds.push(row.id);
+        continue;
+      }
+      if (seen.has(decrypted)) {
+        toDeleteIds.push(row.id); // Duplicate of an already-kept row
+        continue;
+      }
+      seen.add(decrypted);
+    }
+
+    if (toDeleteIds.length > 0) {
+      const { error: delErr } = await supabaseClient
+        .from(table)
+        .delete()
+        .in('id', toDeleteIds);
+      if (delErr) console.warn(`[Sync] ${table} delete failed:`, delErr.message);
+    }
+
+    if (toInsert.length > 0) {
       const encryptedRows = await Promise.all(
-        names.map(async (name, idx) => ({
+        toInsert.map(async ({ name, idx }) => ({
           user_id: userId,
           name: await encryptFieldForTeam(name),
           sort_order: idx,
@@ -93,7 +174,7 @@ async function syncListToSupabase(
         .from(table)
         .insert(encryptedRows);
       if (error) {
-        console.warn(`[Sync] ${table} sync failed:`, error.message);
+        console.warn(`[Sync] ${table} insert failed:`, error.message);
       }
     }
   } catch {
@@ -101,6 +182,147 @@ async function syncListToSupabase(
   } finally {
     _syncInProgress.set(lockKey, false);
   }
+}
+
+/**
+ * Targeted INSERT of a single master-data row owned by the current user.
+ *
+ * Why not syncListToSupabase: in team mode `state.xxx` is the merged team
+ * list, and pushing it back under one user_id duplicates teammate values
+ * into the caller's namespace and inflates egress on every add. This helper
+ * inserts exactly one row (current_user, encrypted(name)) only if the
+ * caller doesn't already own a matching row.
+ */
+async function addMasterToSupabase(
+  table: 'stakeholders' | 'projects' | 'activities' | 'formats',
+  name: string
+): Promise<void> {
+  if (!isSupabaseAvailable() || !supabaseClient) return;
+  if (!hasEncryptionKey()) return;
+  const userId = getSupabaseUserId();
+  if (!userId) return;
+
+  const sessionOk = await ensureValidSession();
+  if (!sessionOk) return;
+
+  // Skip if a row owned by this user already decrypts to `name`
+  const { data: ownRows } = await supabaseClient
+    .from(table)
+    .select('id, name, sort_order')
+    .eq('user_id', userId);
+  if (ownRows) {
+    for (const row of ownRows) {
+      const decrypted = await decryptFieldSmart(row.name);
+      if (decrypted === name) return; // already owned, no-op
+    }
+  }
+
+  const nextSortOrder = ownRows && ownRows.length > 0
+    ? Math.max(...ownRows.map((r: any) => r.sort_order ?? 0)) + 1
+    : 0;
+  const { error } = await supabaseClient
+    .from(table)
+    .insert({
+      user_id: userId,
+      name: await encryptFieldForTeam(name),
+      sort_order: nextSortOrder,
+    });
+  if (error) console.warn(`[Sync] ${table} insert failed:`, error.message);
+}
+
+/**
+ * Targeted RENAME: update every RLS-visible row whose decrypted name equals
+ * `oldName` so its encrypted name becomes encrypt(newName). This rewrites
+ * the value across all team members in one operation (admin-scoped via
+ * the *_update RLS policies). For Mitarbeiter, only own rows update due
+ * to base RLS.
+ */
+async function renameMasterByName(
+  table: 'stakeholders' | 'projects' | 'activities' | 'formats',
+  oldName: string,
+  newName: string
+): Promise<number> {
+  if (!isSupabaseAvailable() || !supabaseClient) return 0;
+  if (!hasEncryptionKey()) return 0;
+  const sessionOk = await ensureValidSession();
+  if (!sessionOk) return 0;
+
+  const { data, error } = await supabaseClient
+    .from(table)
+    .select('id, name');
+  if (error || !data) return 0;
+
+  const matchIds: string[] = [];
+  for (const row of data) {
+    const decrypted = await decryptFieldSmart(row.name);
+    if (decrypted === oldName) matchIds.push(row.id);
+  }
+  if (matchIds.length === 0) return 0;
+
+  // Each row needs its own re-encryption (random IV) — issue updates per row
+  let updated = 0;
+  for (const id of matchIds) {
+    const newEnc = await encryptFieldForTeam(newName);
+    const { error: upErr } = await supabaseClient
+      .from(table)
+      .update({ name: newEnc })
+      .eq('id', id);
+    if (!upErr) updated += 1;
+  }
+  return updated;
+}
+
+/**
+ * Targeted delete by name across all RLS-visible rows of a master-data table.
+ *
+ * Background: master data is per-user, but team RLS lets every member see
+ * every other member's rows. Naively deleting "Konzept" from your own
+ * namespace leaves teammate copies untouched, and they reappear on the next
+ * sync via the merged read. This helper closes that gap by:
+ *   1. Selecting all rows the caller can SEE (RLS = own + team in team mode)
+ *   2. Decrypting each row's name client-side (random IV per row, so we
+ *      can't match server-side)
+ *   3. Collecting the IDs of every row whose decrypted name equals `name`
+ *   4. Deleting those IDs in a single batch
+ *
+ * RLS additionally gates DELETE: the base policy blocks teammate rows for
+ * non-admins, but the new admin DELETE policies (migration 20260426000000)
+ * permit team creators to clean up across the team. Mitarbeiter calling
+ * this helper still only delete their own rows — server-side enforced.
+ *
+ * Returns the number of rows actually deleted.
+ */
+async function deleteMasterByName(
+  table: 'stakeholders' | 'projects' | 'activities' | 'formats',
+  name: string
+): Promise<number> {
+  if (!isSupabaseAvailable() || !supabaseClient) return 0;
+  const sessionOk = await ensureValidSession();
+  if (!sessionOk) return 0;
+
+  // Pull all rows the caller can see (RLS scope: own + teammates in team mode)
+  const { data, error } = await supabaseClient
+    .from(table)
+    .select('id, name');
+  if (error || !data) return 0;
+
+  // Match by decrypted name (case-sensitive — matches the canonical add path)
+  const matchIds: string[] = [];
+  for (const row of data) {
+    const decrypted = await decryptFieldSmart(row.name);
+    if (decrypted === name) matchIds.push(row.id);
+  }
+  if (matchIds.length === 0) return 0;
+
+  const { error: delErr } = await supabaseClient
+    .from(table)
+    .delete()
+    .in('id', matchIds);
+  if (delErr) {
+    console.warn(`[Sync] ${table} delete-by-name failed:`, delErr.message);
+    return 0;
+  }
+  return matchIds.length;
 }
 
 /**
@@ -273,6 +495,10 @@ export const useMasterStore = create<MasterState>((set, get) => ({
     }
   },
 
+  // ── add* uses targeted INSERT (one row per add) ──
+  // syncListToSupabase pushed the entire merged team list under the caller's
+  // user_id, which duplicated teammate values into the caller's namespace
+  // and inflated Supabase egress on every add. Targeted insert is precise.
   addStakeholder: async (name: string) => {
     set({ error: null });
     try {
@@ -281,10 +507,8 @@ export const useMasterStore = create<MasterState>((set, get) => ({
       const updated = [...state.stakeholders, name].sort();
       set({ stakeholders: updated });
       setUserData('stakeholders', updated);
-
-      // Sync full list to Supabase (encrypted)
-      const userId = getSupabaseUserId();
-      if (userId) syncListToSupabase('stakeholders', updated, userId);
+      _suppressMasterPollFor(3000);
+      await addMasterToSupabase('stakeholders', name);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to add stakeholder';
       set({ error: message });
@@ -299,9 +523,8 @@ export const useMasterStore = create<MasterState>((set, get) => ({
       const updated = [...state.projects, name].sort();
       set({ projects: updated });
       setUserData('projects', updated);
-
-      const userId = getSupabaseUserId();
-      if (userId) syncListToSupabase('projects', updated, userId);
+      _suppressMasterPollFor(3000);
+      await addMasterToSupabase('projects', name);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to add project';
       set({ error: message });
@@ -317,15 +540,20 @@ export const useMasterStore = create<MasterState>((set, get) => ({
       const updated = [...state.activities, name].sort();
       set({ activities: updated });
       setUserData('activities', updated);
-
-      const userId = getSupabaseUserId();
-      if (userId) syncListToSupabase('activities', updated, userId);
+      _suppressMasterPollFor(3000);
+      await addMasterToSupabase('activities', name);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to add activity';
       set({ error: message });
     }
   },
 
+  // ── remove* uses targeted delete-by-name across ALL visible rows ──
+  // Why not syncListToSupabase: in team mode, state.xxx is the merged team
+  // list; pushing it back under a single user_id duplicates teammate values
+  // into the caller's namespace AND leaves teammate copies of the deleted
+  // value intact (which then reappear on the next pull). Targeted ID delete
+  // is precise and idempotent.
   removeStakeholder: async (name: string) => {
     set({ error: null });
     try {
@@ -333,9 +561,8 @@ export const useMasterStore = create<MasterState>((set, get) => ({
       const updated = state.stakeholders.filter((s) => s !== name);
       set({ stakeholders: updated });
       setUserData('stakeholders', updated);
-
-      const userId = getSupabaseUserId();
-      if (userId) await syncListToSupabase('stakeholders', updated, userId);
+      _suppressMasterPollFor(5000);
+      await deleteMasterByName('stakeholders', name);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to remove stakeholder';
       set({ error: message });
@@ -350,9 +577,8 @@ export const useMasterStore = create<MasterState>((set, get) => ({
       const updated = state.projects.filter((p) => p !== name);
       set({ projects: updated });
       setUserData('projects', updated);
-
-      const userId = getSupabaseUserId();
-      if (userId) await syncListToSupabase('projects', updated, userId);
+      _suppressMasterPollFor(5000);
+      await deleteMasterByName('projects', name);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to remove project';
       set({ error: message });
@@ -367,9 +593,8 @@ export const useMasterStore = create<MasterState>((set, get) => ({
       const updated = state.activities.filter((a) => a !== name);
       set({ activities: updated });
       setUserData('activities', updated);
-
-      const userId = getSupabaseUserId();
-      if (userId) await syncListToSupabase('activities', updated, userId);
+      _suppressMasterPollFor(5000);
+      await deleteMasterByName('activities', name);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to remove activity';
       set({ error: message });
@@ -377,6 +602,7 @@ export const useMasterStore = create<MasterState>((set, get) => ({
     }
   },
 
+  // ── rename* uses targeted UPDATE on rows whose decrypted name matches ──
   renameStakeholder: async (oldName: string, newName: string) => {
     set({ error: null });
     try {
@@ -389,9 +615,8 @@ export const useMasterStore = create<MasterState>((set, get) => ({
         .sort();
       set({ stakeholders: updated });
       setUserData('stakeholders', updated);
-
-      const userId = getSupabaseUserId();
-      if (userId) await syncListToSupabase('stakeholders', updated, userId);
+      _suppressMasterPollFor(3000);
+      await renameMasterByName('stakeholders', oldName, newName);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to rename stakeholder';
       set({ error: message });
@@ -411,9 +636,8 @@ export const useMasterStore = create<MasterState>((set, get) => ({
         .sort();
       set({ projects: updated });
       setUserData('projects', updated);
-
-      const userId = getSupabaseUserId();
-      if (userId) await syncListToSupabase('projects', updated, userId);
+      _suppressMasterPollFor(3000);
+      await renameMasterByName('projects', oldName, newName);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to rename project';
       set({ error: message });
@@ -433,9 +657,8 @@ export const useMasterStore = create<MasterState>((set, get) => ({
         .sort();
       set({ activities: updated });
       setUserData('activities', updated);
-
-      const userId = getSupabaseUserId();
-      if (userId) await syncListToSupabase('activities', updated, userId);
+      _suppressMasterPollFor(3000);
+      await renameMasterByName('activities', oldName, newName);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to rename activity';
       set({ error: message });
@@ -452,9 +675,8 @@ export const useMasterStore = create<MasterState>((set, get) => ({
       const updated = [...state.formats, name].sort();
       set({ formats: updated });
       setUserData('formats', updated);
-
-      const userId = getSupabaseUserId();
-      if (userId) syncListToSupabase('formats', updated, userId);
+      _suppressMasterPollFor(3000);
+      await addMasterToSupabase('formats', name);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to add format';
       set({ error: message });
@@ -468,9 +690,8 @@ export const useMasterStore = create<MasterState>((set, get) => ({
       const updated = state.formats.filter((f) => f !== name);
       set({ formats: updated });
       setUserData('formats', updated);
-
-      const userId = getSupabaseUserId();
-      if (userId) await syncListToSupabase('formats', updated, userId);
+      _suppressMasterPollFor(5000);
+      await deleteMasterByName('formats', name);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to remove format';
       set({ error: message });
@@ -490,9 +711,8 @@ export const useMasterStore = create<MasterState>((set, get) => ({
         .sort();
       set({ formats: updated });
       setUserData('formats', updated);
-
-      const userId = getSupabaseUserId();
-      if (userId) await syncListToSupabase('formats', updated, userId);
+      _suppressMasterPollFor(3000);
+      await renameMasterByName('formats', oldName, newName);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to rename format';
       set({ error: message });
@@ -524,6 +744,17 @@ export const useMasterStore = create<MasterState>((set, get) => ({
 let _masterPollInterval: ReturnType<typeof setInterval> | null = null;
 let _masterRealtimeChannels: any[] = [];
 let _masterSuppressUntil: number = 0;
+
+/**
+ * Pause polling/realtime pulls for the next `ms` milliseconds.
+ * Called after local mutations (delete-by-name etc.) so that an in-flight
+ * pull doesn't read a stale "before delete" snapshot and resurrect the row
+ * in the local state. The realtime DELETE event itself will trigger the
+ * next reliable pull after the suppression window ends.
+ */
+function _suppressMasterPollFor(ms: number): void {
+  _masterSuppressUntil = Date.now() + ms;
+}
 
 // Track last known state fingerprint to avoid unnecessary updates
 let _lastMasterFingerprint: string = '';
