@@ -3,13 +3,13 @@ import { useI18n } from '../../i18n';
 import { useEntriesStore } from '../../stores/entriesStore';
 import { useMasterStore } from '../../stores/masterStore';
 import { useUiStore } from '../../stores/uiStore';
-import { PeriodType, FilterState } from '@/types';
+import { PeriodType, FilterState, TimeEntry } from '@/types';
 import { formatDateISO, formatDateDE, getEffectiveDurationMs } from '../../lib/utils';
 import { KpiCards } from './KpiCards';
 import { Heatmap } from './Heatmap';
 import { ActivityBars } from './ActivityBars';
 import { TimelineChart } from './TimelineChart';
-import { Inbox, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { Inbox, ChevronLeft, ChevronRight, RotateCcw, ArrowLeft } from 'lucide-react';
 
 // Helper: get ISO week number
 function getISOWeek(date: Date): number {
@@ -25,10 +25,62 @@ const MONTH_NAMES_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', '
 const DAY_NAMES_DE = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 const DAY_NAMES_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
-export default function DashboardView() {
+/**
+ * Optional props enable an "embedded" / "scoped" mode used by the Team-View
+ * admin drill-down. When `scopedEntries` is provided, the dashboard renders
+ * those entries instead of the current user's, uses local filter state
+ * (no global pollution), and disables the drill-down → entries-view
+ * navigation (which only knows the current user's data).
+ */
+export interface DashboardViewProps {
+  /** When set, render this list instead of the current user's entries. */
+  scopedEntries?: TimeEntry[];
+  /** Subtitle / context label shown above the period selector. */
+  viewerLabel?: string;
+  /** Back-button callback. When set, a back-button is rendered in the header. */
+  onBack?: () => void;
+  /** When true, drill-down clicks no-op (used in scoped mode). */
+  disableDrillDown?: boolean;
+}
+
+export default function DashboardView({
+  scopedEntries,
+  viewerLabel,
+  onBack,
+  disableDrillDown,
+}: DashboardViewProps = {}) {
   const { t, language } = useI18n();
-  const entries = useEntriesStore((state) => state.entries);
-  const { setFilter, clearFilters, filters } = useEntriesStore();
+  const isScoped = scopedEntries !== undefined;
+  const ownEntries = useEntriesStore((state) => state.entries);
+  const entries = isScoped ? scopedEntries! : ownEntries;
+  const globalFilters = useEntriesStore((s) => s.filters);
+  const setGlobalFilter = useEntriesStore((s) => s.setFilter);
+  const clearGlobalFilters = useEntriesStore((s) => s.clearFilters);
+
+  // In scoped mode keep filter state local — pushing filters into the global
+  // entries store would leak member-context into the user's own Entries view.
+  const [localFilters, setLocalFilters] = useState<FilterState>({
+    from: '', to: '', stakeholder: '', project: '', activity: '', format: '', notiz: '',
+  });
+  const filters = isScoped ? localFilters : globalFilters;
+  const setFilter = useCallback(
+    (key: keyof FilterState, value: string) => {
+      if (isScoped) {
+        setLocalFilters((prev) => ({ ...prev, [key]: value }));
+      } else {
+        setGlobalFilter(key, value);
+      }
+    },
+    [isScoped, setGlobalFilter]
+  );
+  const clearFilters = useCallback(() => {
+    if (isScoped) {
+      setLocalFilters({ from: '', to: '', stakeholder: '', project: '', activity: '', format: '', notiz: '' });
+    } else {
+      clearGlobalFilters();
+    }
+  }, [isScoped, clearGlobalFilters]);
+
   const { stakeholders, projects, activities, formats } = useMasterStore();
   const [period, setPeriod] = useState<PeriodType>('week');
   // offset: 0 = current period, -1 = previous, +1 = next (capped at 0 for future)
@@ -134,8 +186,19 @@ export default function DashboardView() {
   const hasActiveFilters = Object.values(filters).some((v) => v !== '');
   const { setCurrentView } = useUiStore();
 
-  // Drill-down: set filters and navigate to entries view
+  // Drill-down: set filters and navigate to entries view.
+  // In scoped (admin-member) mode, the entries view doesn't understand the
+  // member context yet — drill-down is treated as a chart-internal filter
+  // refinement only (no navigation), preventing footgun navigation that
+  // would jump to the admin's OWN entries.
   const drillDown = useCallback((drillFilters: Partial<FilterState>) => {
+    if (disableDrillDown || isScoped) {
+      // Apply the drill-filters as local filter refinement, no navigation
+      for (const [key, value] of Object.entries(drillFilters)) {
+        if (value) setFilter(key as keyof FilterState, value);
+      }
+      return;
+    }
     clearFilters();
     // Apply date range from current period
     if (dateRange?.start) setFilter('from', dateRange.start);
@@ -150,10 +213,34 @@ export default function DashboardView() {
       if (value) setFilter(key as keyof FilterState, value);
     }
     setCurrentView('entries');
-  }, [dateRange, filters, clearFilters, setFilter, setCurrentView]);
+  }, [dateRange, filters, clearFilters, setFilter, setCurrentView, disableDrillDown, isScoped]);
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-4 space-y-6">
+    <div className={isScoped ? 'space-y-6' : 'w-full max-w-7xl mx-auto p-4 space-y-6'}>
+      {/* Optional header — only shown in scoped (admin-member) mode */}
+      {(viewerLabel || onBack) && (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="px-3 py-2 rounded font-medium transition-all flex items-center gap-2"
+                style={{ background: 'var(--surface-solid)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+              >
+                <ArrowLeft className="w-4 h-4" />
+                {t('team.backToOverview')}
+              </button>
+            )}
+            {viewerLabel && (
+              <div>
+                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('team.viewingMember')}</div>
+                <h3 className="text-xl font-bold" style={{ color: 'var(--neon-violet, #9B8EC4)' }}>{viewerLabel}</h3>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Period Selector */}
       <div className="space-y-3">
         <div className="flex gap-2 flex-wrap">

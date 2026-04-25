@@ -15,8 +15,9 @@ import { TeamMatrix } from './TeamMatrix';
 import { TeamWorkload } from './TeamWorkload';
 import { TeamTimeline } from './TeamTimeline';
 import { useAuthStore } from '../../stores/authStore';
-import { Copy, Users, UserPlus, UserMinus, Wifi, WifiOff, QrCode, Camera, RefreshCw, ChevronLeft, ChevronRight, RotateCcw, Eye, ArrowLeft, Pencil, Trash2, ShieldCheck, Crown, User as UserIcon } from 'lucide-react';
+import { Copy, Users, UserPlus, UserMinus, Wifi, WifiOff, QrCode, Camera, RefreshCw, ChevronLeft, ChevronRight, RotateCcw, Eye, Pencil, Trash2, ShieldCheck, Crown, User as UserIcon } from 'lucide-react';
 import type { ZeRoleName } from '@/types';
+import DashboardView from '../Dashboard/DashboardView';
 
 // Helper: get ISO week number
 function getISOWeek(date: Date): number {
@@ -738,11 +739,9 @@ export default function TeamView() {
           onBack={() => setSelectedMember(null)}
           onEdit={(e) => setEditingEntry(e)}
           onDelete={(e) => setDeletingEntry(e)}
-          backLabel={t('team.backToOverview')}
           editLabel={t('title.edit')}
           deleteLabel={t('title.delete')}
           adminHint={t('team.adminEditHint')}
-          viewingMemberLabel={t('team.viewingMember')}
         />
       ) : (
         <>
@@ -855,11 +854,9 @@ interface MemberDetailViewProps {
   onBack: () => void;
   onEdit: (e: TimeEntry) => void;
   onDelete: (e: TimeEntry) => void;
-  backLabel: string;
   editLabel: string;
   deleteLabel: string;
   adminHint: string;
-  viewingMemberLabel: string;
 }
 
 function MemberDetailView({
@@ -868,13 +865,11 @@ function MemberDetailView({
   onBack,
   onEdit,
   onDelete,
-  backLabel,
   editLabel,
   deleteLabel,
   adminHint,
-  viewingMemberLabel,
 }: MemberDetailViewProps) {
-  // Sort newest first
+  // Sort newest first for the entry-management table at the bottom
   const sorted = useMemo(
     () =>
       [...entries].sort((a, b) => {
@@ -884,60 +879,29 @@ function MemberDetailView({
     [entries]
   );
 
-  const totalMs = useMemo(
-    () => sorted.reduce((s, e) => s + getEffectiveDurationMs(e), 0),
-    [sorted]
-  );
-  const dayCount = useMemo(() => new Set(sorted.map((e) => e.date)).size, [sorted]);
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="px-3 py-2 rounded font-medium transition-all flex items-center gap-2"
-            style={{ background: 'var(--surface-solid)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            {backLabel}
-          </button>
-          <div>
-            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{viewingMemberLabel}</div>
-            <h3 className="text-xl font-bold" style={{ color: 'var(--neon-violet, #9B8EC4)' }}>{memberId}</h3>
-          </div>
-        </div>
-        <div className="text-xs italic" style={{ color: 'var(--text-muted)' }}>
-          {adminHint}
-        </div>
+    <div className="space-y-6">
+      {/* Embedded dashboard with the same KPI cards / Heatmap / ActivityBars
+          / Format breakdown / TimelineChart / period selector / filters as
+          the user's own dashboard, but driven by this member's entries.
+          Drill-down clicks act as local filter refinements only — they
+          don't navigate to the entries view (which is owner-scoped). */}
+      <DashboardView
+        scopedEntries={entries}
+        viewerLabel={memberId}
+        onBack={onBack}
+        disableDrillDown
+      />
+
+      {/* Admin hint shown above the entry-edit table */}
+      <div className="text-xs italic text-right" style={{ color: 'var(--text-muted)' }}>
+        {adminHint}
       </div>
 
-      {/* Mini KPIs for the focused member */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-          <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Total</div>
-          <div className="text-2xl font-bold" style={{ color: 'var(--neon-cyan)' }}>
-            {formatDurationHM(totalMs)}
-          </div>
-        </div>
-        <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-          <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Einträge</div>
-          <div className="text-2xl font-bold" style={{ color: 'var(--neon-violet, #9B8EC4)' }}>
-            {sorted.length}
-          </div>
-        </div>
-        <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-          <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Aktive Tage</div>
-          <div className="text-2xl font-bold" style={{ color: 'var(--success)' }}>
-            {dayCount}
-          </div>
-        </div>
-      </div>
-
-      {/* Entry list */}
-      {sorted.length === 0 ? (
-        <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>—</div>
-      ) : (
+      {/* Editable entry list — admin can fix individual rows here.
+          The dashboard above shows the same data aggregated; this table
+          is for actually changing things. */}
+      {sorted.length > 0 && (
         <div className="rounded-lg overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <table className="w-full text-sm">
             <thead>
