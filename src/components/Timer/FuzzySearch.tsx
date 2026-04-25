@@ -305,6 +305,14 @@ const FuzzySearch: React.FC<FuzzySearchProps> = ({ onSelect }) => {
       if (e.key.length === 1 && !e.repeat) {
         // Check if our container is visible (timer view is active)
         if (!containerRef.current || containerRef.current.offsetParent === null) return;
+
+        // Bug fix: previously the first letter appeared doubled. Cause —
+        // we both manually appended e.key to the query AND focused the
+        // input mid-keydown, after which the browser's default character
+        // insertion still ran on the now-focused input, producing 'aa'.
+        // preventDefault() stops the browser's insertion so only our
+        // controlled setQuery applies.
+        e.preventDefault();
         setIsOpen(true);
         setQuery((prev) => {
           const next = prev + e.key;

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useEntriesStore } from '../../stores/entriesStore';
 import { getUserData, setUserData } from '../../lib/userStorage';
 
@@ -65,7 +66,12 @@ export default function NoteInput({ value, onChange, placeholder, style, classNa
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Portal-rendered dropdown position — recomputed each time the dropdown
+  // opens so it tracks the input even when the parent (e.g. TimerLane)
+  // clips with overflow:hidden, which previously hid the suggestions.
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
 
   // Filter suggestions based on current input
   const suggestions = useMemo(() => {
@@ -79,16 +85,42 @@ export default function NoteInput({ value, onChange, placeholder, style, classNa
       .slice(0, 8);
   }, [value, allNotes]);
 
-  // Close on outside click
+  // Close on outside click — must consider both the wrapper AND the
+  // portal-rendered dropdown (which lives outside wrapperRef in the DOM).
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inWrapper = wrapperRef.current?.contains(target);
+      const inDropdown = dropdownRef.current?.contains(target);
+      if (!inWrapper && !inDropdown) {
         setShowSuggestions(false);
       }
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  // Recompute the dropdown position whenever it opens or the input layout
+  // changes underneath us (window resize / scroll while open).
+  useEffect(() => {
+    if (!showSuggestions) return;
+    function reposition() {
+      if (!inputRef.current) return;
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + 2,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+    reposition();
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+    return () => {
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
+  }, [showSuggestions]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!showSuggestions || suggestions.length === 0) return;
@@ -135,21 +167,23 @@ export default function NoteInput({ value, onChange, placeholder, style, classNa
         className={className}
       />
 
-      {showSuggestions && suggestions.length > 0 && (
+      {/* Suggestions rendered via portal so overflow:hidden ancestors
+          (e.g. the TimerLane container) cannot clip the dropdown. */}
+      {showSuggestions && suggestions.length > 0 && createPortal(
         <div
+          ref={dropdownRef}
           style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            right: 0,
-            zIndex: 50,
-            background: 'var(--surface)',
+            position: 'fixed',
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            width: dropdownPos.width,
+            zIndex: 9999,
+            background: 'var(--surface-solid, var(--surface))',
             border: '1px solid var(--border)',
             borderRadius: '8px',
             boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
             maxHeight: compact ? '150px' : '200px',
             overflowY: 'auto',
-            marginTop: '2px',
           }}
         >
           {suggestions.map((note, idx) => (
@@ -175,7 +209,8 @@ export default function NoteInput({ value, onChange, placeholder, style, classNa
               {note}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
