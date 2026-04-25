@@ -4,7 +4,7 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useI18n } from '../../i18n';
 import { useIsMitarbeiter } from '../../hooks/useRole';
-import { formatDurationHM, getTodayISO, getEffectiveDurationMs } from '../../lib/utils';
+import { formatDurationHM, getTodayISO, computeWallClockMs } from '../../lib/utils';
 import { Plus } from 'lucide-react';
 import TimerLane from './TimerLane';
 import FuzzySearch from './FuzzySearch';
@@ -43,7 +43,9 @@ const TimerView: React.FC = () => {
     return entries.filter((e) => e.date === todayISO);
   }, [entries]);
 
-  const todayTotalMs = useMemo(() => todayEntries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0), [todayEntries]);
+  // Wall-clock today: union per day so overlapping manual entries don't
+  // double-count toward the daily goal ring.
+  const todayTotalMs = useMemo(() => computeWallClockMs(todayEntries), [todayEntries]);
 
   // Running timers total (live)
   const runningTotalMs = taskSlots.reduce((sum, slot) => sum + getSlotElapsed(slot.id), 0);

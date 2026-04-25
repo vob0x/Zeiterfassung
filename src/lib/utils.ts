@@ -203,6 +203,47 @@ export function getTodayISO(): string {
 }
 
 /**
+ * Wall-clock total duration: groups entries by date and computes the
+ * UNION of intervals per day, then sums across days.
+ *
+ * Why this and not a simple `sum(getEffectiveDurationMs)`:
+ *   - Two entries 09:00–10:00 and 09:30–10:30 represent only 1.5h of
+ *     real time, not 2h. A naive sum double-counts the overlap.
+ *   - Multistakeholder is intentionally encoded as ONE entry with a
+ *     stakeholder ARRAY (not two overlapping rows), so it doesn't
+ *     create the double-count problem here.
+ *
+ * Use this for "how long did the user/team actually work" KPIs (top-of-
+ * page totals, daily/weekly/monthly cards, per-day cells in Team-Daily).
+ *
+ * Per-dimension breakdowns (per stakeholder, per project, etc.) should
+ * NOT use this — there a 1h slot with stakeholders [A, B] should count
+ * as 1h under both A and B (sum 2h), so each axis gets full credit.
+ * The day total still reads as 1h (wall-clock).
+ */
+export function computeWallClockMs(
+  entries: Array<{ date: string; start_time: string; end_time: string; duration_ms?: number }>
+): number {
+  if (!entries || entries.length === 0) return 0;
+
+  // Bucket by date
+  const byDate = new Map<string, Array<{ start_time: string; end_time: string }>>();
+  for (const e of entries) {
+    if (!e.date) continue;
+    const list = byDate.get(e.date);
+    if (list) list.push({ start_time: e.start_time, end_time: e.end_time });
+    else byDate.set(e.date, [{ start_time: e.start_time, end_time: e.end_time }]);
+  }
+
+  // Per-day union, then sum across days
+  let total = 0;
+  byDate.forEach((dayEntries) => {
+    total += computeUnionMs(dayEntries);
+  });
+  return total;
+}
+
+/**
  * Get week range [monday, sunday] in ISO format
  */
 export function getWeekRange(): [string, string] {

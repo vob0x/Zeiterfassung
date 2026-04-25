@@ -9,7 +9,7 @@ import { useIsMitarbeiter, useIsAdmin } from '../../hooks/useRole';
 import ConfirmDialog from '../UI/ConfirmDialog';
 import EditEntryModal from '../Entries/EditEntryModal';
 import { PeriodType, TimeEntry } from '@/types';
-import { formatDateISO, formatDateDE, formatDurationHM, getEffectiveDurationMs } from '../../lib/utils';
+import { formatDateISO, formatDateDE, formatDurationHM, getEffectiveDurationMs, computeWallClockMs } from '../../lib/utils';
 import { TeamDaily } from './TeamDaily';
 import { TeamMatrix } from './TeamMatrix';
 import { TeamWorkload } from './TeamWorkload';
@@ -266,8 +266,17 @@ export default function TeamView() {
     [filteredMemberEntries]
   );
 
-  // Compute KPIs from filtered data
-  const totalHours = allTeamEntries.reduce((sum, entry) => sum + (entry.duration_ms || 0) / (1000 * 60 * 60), 0);
+  // Compute KPIs from filtered data.
+  // totalHours uses wall-clock PER MEMBER then sums — so each member's
+  // overlapping manual entries don't double-count, but parallel work by
+  // different members still adds up (Alice + Bob both 09–10 = 2h team-time).
+  const totalHours = useMemo(() => {
+    let sum = 0;
+    filteredMemberEntries.forEach((entries) => {
+      sum += computeWallClockMs(entries) / (1000 * 60 * 60);
+    });
+    return sum;
+  }, [filteredMemberEntries]);
   const personCount = members.length;
   const entryCount = allTeamEntries.length;
   const avgPerPerson = personCount > 0 ? totalHours / personCount : 0;

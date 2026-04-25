@@ -4,7 +4,7 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useMasterStore } from '../../stores/masterStore';
 import { useUiStore } from '../../stores/uiStore';
 import { PeriodType, FilterState, TimeEntry } from '@/types';
-import { formatDateISO, formatDateDE, getEffectiveDurationMs } from '../../lib/utils';
+import { formatDateISO, formatDateDE, computeWallClockMs } from '../../lib/utils';
 import { KpiCards } from './KpiCards';
 import { Heatmap } from './Heatmap';
 import { ActivityBars } from './ActivityBars';
@@ -175,10 +175,12 @@ export default function DashboardView({
   const todayEntries = entries.filter((e) => e.date === todayStr);
 
   // Sum using effective duration (plausibility-checked against Von-Bis)
-  const kpiToday = todayEntries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0) / (1000 * 60 * 60);
+  // Wall-clock totals: a 09:00–10:00 + 09:30–10:30 pair counts as 1.5h,
+  // not 2h, by computing per-day unions and summing across days.
+  const kpiToday = computeWallClockMs(todayEntries) / (1000 * 60 * 60);
 
   const kpiPeriod = useMemo(() => {
-    return filteredEntries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0) / (1000 * 60 * 60);
+    return computeWallClockMs(filteredEntries) / (1000 * 60 * 60);
   }, [filteredEntries]);
 
   const kpiEntries = filteredEntries.length;

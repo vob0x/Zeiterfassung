@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { TimeEntry } from '@/types';
 import { useI18n } from '../../i18n';
-import { getEffectiveDurationMs } from '../../lib/utils';
+import { computeUnionMs } from '../../lib/utils';
 
 interface TeamDailyProps {
   memberEntries: Map<string, TimeEntry[]>;
@@ -43,7 +43,9 @@ export function TeamDaily({ memberEntries, entries }: TeamDailyProps) {
 
       for (const date of uniqueDates) {
         const memberDateEntries = (memberEntries.get(memberId) || []).filter((e) => e.date === date);
-        const hours = memberDateEntries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0) / (1000 * 60 * 60);
+        // Wall-clock per cell: union of intervals on this day for this
+        // member, so overlapping manual entries don't inflate the heat map.
+        const hours = computeUnionMs(memberDateEntries) / (1000 * 60 * 60);
         matrix[memberId][date] = hours;
         // Only count weekdays (Mo–Fr) for the average — weekend work
         // is voluntary/exceptional and shouldn't dilute the daily average.
