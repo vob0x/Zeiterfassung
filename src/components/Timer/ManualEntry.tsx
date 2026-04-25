@@ -3,6 +3,7 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useMasterStore } from '../../stores/masterStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useI18n } from '../../i18n';
+import { useIsMitarbeiter } from '../../hooks/useRole';
 import { formatDateISO } from '../../lib/utils';
 import { getTodayISO } from '../../lib/utils';
 import NoteInput, { saveNoteToHistory } from '../UI/NoteInput';
@@ -25,13 +26,16 @@ const ManualEntry: React.FC<ManualEntryProps> = ({ embedded = false }) => {
     addActivity: addActivityToStore,
     addFormat: addFormatToStore,
   } = useMasterStore();
+  // Mitarbeiter cannot create new Format / Tätigkeit values — the inline "+"
+  // affordances next to those selects are hidden below.
+  const isMitarbeiter = useIsMitarbeiter();
 
   const [formData, setFormData] = useState({
     date: getTodayISO(),
     stakeholders: [] as string[], // NEW: array for multi-select
     projekt: '',
-    taetigkeit: '',
-    format: 'Einzelarbeit', // NEW: default format
+    taetigkeit: 'Produktiv', // Default activity per UX request
+    format: 'Einzelarbeit', // Default format per UX request
     startTime: '',
     endTime: '',
     notiz: '',
@@ -124,8 +128,8 @@ const ManualEntry: React.FC<ManualEntryProps> = ({ embedded = false }) => {
         date: getTodayISO(),
         stakeholders: [], // NEW: reset to empty array
         projekt: '',
-        taetigkeit: '',
-        format: 'Einzelarbeit', // NEW: reset to default
+        taetigkeit: 'Produktiv', // Reset to default activity
+        format: 'Einzelarbeit', // Reset to default format
         startTime: '',
         endTime: '',
         notiz: '',
@@ -268,7 +272,7 @@ const ManualEntry: React.FC<ManualEntryProps> = ({ embedded = false }) => {
             <button type="button" onClick={() => setShowAddProject(!showAddProject)} style={inlineBtnStyle}>+</button>
           </div>
 
-          {/* Format */}
+          {/* Format — Mitarbeiter cannot add new values */}
           <div style={{ display: 'flex', gap: '4px', alignItems: 'stretch' }}>
             <select
               value={formData.format}
@@ -279,10 +283,12 @@ const ManualEntry: React.FC<ManualEntryProps> = ({ embedded = false }) => {
                 <option key={f} value={f}>{f}</option>
               ))}
             </select>
-            <button type="button" onClick={() => setShowAddFormat(!showAddFormat)} style={inlineBtnStyle}>+</button>
+            {!isMitarbeiter && (
+              <button type="button" onClick={() => setShowAddFormat(!showAddFormat)} style={inlineBtnStyle}>+</button>
+            )}
           </div>
 
-          {/* Activity */}
+          {/* Activity — Mitarbeiter cannot add new values */}
           <div style={{ display: 'flex', gap: '4px', alignItems: 'stretch' }}>
             <select
               value={formData.taetigkeit}
@@ -294,7 +300,9 @@ const ManualEntry: React.FC<ManualEntryProps> = ({ embedded = false }) => {
                 <option key={a} value={a}>{a}</option>
               ))}
             </select>
-            <button type="button" onClick={() => setShowAddActivity(!showAddActivity)} style={inlineBtnStyle}>+</button>
+            {!isMitarbeiter && (
+              <button type="button" onClick={() => setShowAddActivity(!showAddActivity)} style={inlineBtnStyle}>+</button>
+            )}
           </div>
         </div>
 

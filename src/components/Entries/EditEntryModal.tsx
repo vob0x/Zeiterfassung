@@ -4,6 +4,7 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useMasterStore } from '../../stores/masterStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useI18n } from '../../i18n';
+import { useIsMitarbeiter } from '../../hooks/useRole';
 import { Plus, X } from 'lucide-react';
 import NoteInput, { saveNoteToHistory } from '../UI/NoteInput';
 
@@ -25,6 +26,8 @@ const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, isOpen, onClose 
     addProject: addProjectToStore,
     addActivity: addActivityToStore,
   } = useMasterStore();
+  // Mitarbeiter cannot create new Tätigkeit values from the edit modal.
+  const isMitarbeiter = useIsMitarbeiter();
 
   const [formData, setFormData] = useState({
     date: entry.date,
@@ -334,16 +337,18 @@ const EditEntryModal: React.FC<EditEntryModalProps> = ({ entry, isOpen, onClose 
                   <option key={a} value={a}>{a}</option>
                 ))}
               </select>
-              <button
-                type="button"
-                onClick={() => setShowAddActivity(!showAddActivity)}
-                className="px-3 py-2 rounded transition-colors"
-                style={{ background: 'var(--surface-solid)', color: 'var(--text-secondary)' }}
-              >
-                <Plus className="w-4 h-4" />
-              </button>
+              {!isMitarbeiter && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddActivity(!showAddActivity)}
+                  className="px-3 py-2 rounded transition-colors"
+                  style={{ background: 'var(--surface-solid)', color: 'var(--text-secondary)' }}
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            {showAddActivity && (
+            {!isMitarbeiter && showAddActivity && (
               <div className="flex gap-1 mt-2">
                 <input
                   id="edit-new-activity"

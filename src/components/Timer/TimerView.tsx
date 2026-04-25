@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useTimerStore } from '../../stores/timerStore';
 import { useEntriesStore } from '../../stores/entriesStore';
 import { useI18n } from '../../i18n';
+import { useIsMitarbeiter } from '../../hooks/useRole';
 import { formatDurationHM, getTodayISO, getEffectiveDurationMs } from '../../lib/utils';
 import { Plus } from 'lucide-react';
 import TimerLane from './TimerLane';
@@ -31,6 +32,8 @@ const TimerView: React.FC = () => {
   const { t } = useI18n();
   const { taskSlots, addSlot, stopAllTimers, getSlotElapsed } = useTimerStore();
   const { entries } = useEntriesStore();
+  // Mitarbeiter sees a focused task list — no DayRing, no goal-reach animations.
+  const isMitarbeiter = useIsMitarbeiter();
 
   // Today's saved entries
   const todayEntries = useMemo(() => {
@@ -79,12 +82,14 @@ const TimerView: React.FC = () => {
     return segs;
   }, [taskSlots, todayTotalMs, getSlotElapsed, t]);
 
-  // Fuzzy search → create a new lane
+  // Fuzzy search → create a new lane.
+  // If the search result didn't pin a specific Format / Tätigkeit, fall back
+  // to the default pair Einzelarbeit / Produktiv (UX request after 2-week pilot).
   const handleFuzzySelect = (combo: { stakeholder: string; projekt: string; taetigkeit: string; format: string }) => {
     addSlot({
       stakeholder: [combo.stakeholder],
       projekt: combo.projekt,
-      taetigkeit: combo.taetigkeit,
+      taetigkeit: combo.taetigkeit || 'Produktiv',
       format: combo.format || 'Einzelarbeit',
       notiz: '',
     });
@@ -98,9 +103,9 @@ const TimerView: React.FC = () => {
     }, 50);
   };
 
-  // "+" empty timer
+  // "+" empty timer — defaults to Einzelarbeit / Produktiv per UX request.
   const handleAddEmpty = () => {
-    addSlot({ stakeholder: [], projekt: '', taetigkeit: '', format: 'Einzelarbeit', notiz: '' });
+    addSlot({ stakeholder: [], projekt: '', taetigkeit: 'Produktiv', format: 'Einzelarbeit', notiz: '' });
     // Auto-start
     setTimeout(() => {
       const state = useTimerStore.getState();
@@ -113,7 +118,12 @@ const TimerView: React.FC = () => {
 
   return (
     <div className="py-4">
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-6" style={{ alignItems: 'start' }}>
+      {/* Mitarbeiter: single full-width column (no DayRing / goal sidebar).
+          Admin / solo: 2-column grid with DayRing on the right. */}
+      <div
+        className={isMitarbeiter ? '' : 'grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-6'}
+        style={{ alignItems: 'start' }}
+      >
         {/* ── Left Column: Stack Timer ── */}
         <div>
           {/* Header */}
@@ -270,7 +280,8 @@ const TimerView: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Right Column: DayRing + Saved Log ── */}
+        {/* ── Right Column: DayRing + Saved Log — admin / solo only ── */}
+        {!isMitarbeiter && (
         <div className="lg:sticky lg:top-20" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* DayRing */}
           <div
@@ -424,6 +435,7 @@ const TimerView: React.FC = () => {
             <div>■ {t('timer.shortcutStop')}</div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

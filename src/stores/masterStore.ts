@@ -135,7 +135,9 @@ export async function syncAllMasterData(): Promise<void> {
 export const useMasterStore = create<MasterState>((set, get) => ({
   stakeholders: [],
   projects: [],
-  activities: [],
+  // Seed with 'Produktiv' so the new-timer default actually resolves to a
+  // selectable option for fresh accounts (UX request after 2-week pilot).
+  activities: ['Produktiv'],
   formats: ['Einzelarbeit', 'Meeting', 'Telefonat', 'Workshop'], // NEW: default formats
   loading: false,
   error: null,
@@ -146,7 +148,7 @@ export const useMasterStore = create<MasterState>((set, get) => ({
       // Always load from localStorage first (source of truth)
       const localStakeholders = getUserData<string[]>('stakeholders', []);
       const localProjects = getUserData<string[]>('projects', []);
-      const localActivities = getUserData<string[]>('activities', []);
+      const localActivities = getUserData<string[]>('activities', ['Produktiv']);
       const localFormats = getUserData<string[]>('formats', ['Einzelarbeit', 'Meeting', 'Telefonat', 'Workshop']);
 
       // Show local data immediately

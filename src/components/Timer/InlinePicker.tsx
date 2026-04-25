@@ -11,6 +11,12 @@ interface InlinePickerProps {
   onAdd?: (value: string) => Promise<void>;
   addPlaceholder?: string;
   color?: string;
+  /**
+   * When true, the "Add new" affordance is hidden even if onAdd is provided.
+   * Used to gate adding values for restricted roles (e.g., Mitarbeiter cannot
+   * add new Format / Tätigkeit values).
+   */
+  canAdd?: boolean;
 }
 
 const InlinePicker: React.FC<InlinePickerProps> = ({
@@ -21,6 +27,7 @@ const InlinePicker: React.FC<InlinePickerProps> = ({
   onAdd,
   addPlaceholder,
   color,
+  canAdd = true,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState('');
@@ -233,7 +240,7 @@ const InlinePicker: React.FC<InlinePickerProps> = ({
           </div>
 
           {/* Add new */}
-          {onAdd && (
+          {onAdd && canAdd && (
             <div style={{ borderTop: '1px solid var(--border)', padding: '6px 8px' }}>
               {isAdding ? (
                 <div style={{ display: 'flex', gap: '4px' }}>

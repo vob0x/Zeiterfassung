@@ -145,12 +145,13 @@ const QuickShortcuts: React.FC = () => {
       !hiddenShortcuts.includes(`${auto.stakeholder}|${auto.projekt}`)
   );
 
-  // Handle shortcut click
+  // Handle shortcut click — defaults Tätigkeit to Produktiv when the
+  // shortcut doesn't pin a specific activity.
   const handleShortcutClick = (shortcut: ShortcutItem) => {
     addSlot({
       stakeholder: [shortcut.stakeholder],
       projekt: shortcut.projekt,
-      taetigkeit: shortcut.taetigkeit || '',
+      taetigkeit: shortcut.taetigkeit || 'Produktiv',
       format: 'Einzelarbeit',
       notiz: '',
     });

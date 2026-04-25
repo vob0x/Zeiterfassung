@@ -5,6 +5,7 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useMasterStore } from '../../stores/masterStore';
 import { useI18n } from '../../i18n';
 import { useUiStore } from '../../stores/uiStore';
+import { useIsMitarbeiter } from '../../hooks/useRole';
 import { X, MessageSquare } from 'lucide-react';
 import { formatDuration, formatDateISO } from '../../lib/utils';
 import InlinePicker from './InlinePicker';
@@ -40,6 +41,9 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
     addActivity,
     addFormat,
   } = useMasterStore();
+  // Mitarbeiter may only add new Stakeholder + Projekt values; Format & Tätigkeit
+  // are picked from existing options. This mirrors the ManageView restriction.
+  const isMitarbeiter = useIsMitarbeiter();
 
   const elapsedMs = getSlotElapsed(slot.id);
   const isRunning = !slot.isPaused;
@@ -332,6 +336,7 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
           onAdd={async (v) => { await addFormat(v); }}
           addPlaceholder={t('ph.newFormat')}
           color={c + '90'}
+          canAdd={!isMitarbeiter}
         />
 
         <InlinePicker
@@ -342,6 +347,7 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
           onAdd={async (v) => { await addActivity(v); }}
           addPlaceholder={t('ph.newTaetigkeit')}
           color={isRunning ? c : 'var(--text-secondary)'}
+          canAdd={!isMitarbeiter}
         />
       </div>
 

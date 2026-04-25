@@ -135,6 +135,7 @@ export const fr = {
     projekte: "Projet/Produit",
     taetigkeiten: "Activité",
     formate: "Format",
+    readonlyHint: "Seuls les administrateurs peuvent modifier le format et l'activité.",
     backup: "Sauvegarde & restauration",
     csv: "CSV (entrées uniquement)",
     noEntries: "Aucune entrée",
@@ -205,6 +206,13 @@ export const fr = {
     scanFallback: "Utilisez l'appareil photo de votre téléphone ou une application QR pour scanner le code. Le lien ouvrira l'application et remplira le code automatiquement.",
     scanHint: "Placez le QR code dans le cadre",
     cameraError: "Impossible d'accéder à la caméra. Veuillez autoriser l'accès dans les paramètres du navigateur.",
+    roleAdmin: "Admin",
+    roleEmployee: "Collaborateur",
+    yourRole: "Votre rôle",
+    employeeRestriction: "En tant que collaborateur, vous ne voyez que les totaux de l'équipe.",
+    backToOverview: "Retour à la vue d'équipe",
+    viewingMember: "Vous consultez les données de",
+    adminEditHint: "En tant qu'administrateur, vous pouvez consulter et modifier les entrées de ce membre.",
   },
 
   // KPIs

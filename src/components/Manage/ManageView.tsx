@@ -5,15 +5,23 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useUiStore } from '../../stores/uiStore';
 import { exportBackup, importBackup, exportCSV, importCSV } from '../../lib/backup';
 import { clearAllUserData } from '../../lib/userStorage';
+import { useIsAdmin, useIsMitarbeiter } from '../../hooks/useRole';
 import ConfirmDialog from '../UI/ConfirmDialog';
 import DuplicateReview from './DuplicateReview';
-import { Pencil, Trash2, Search } from 'lucide-react';
+import { Pencil, Trash2, Search, Lock } from 'lucide-react';
 
 export default function ManageView() {
   const { t, tArray } = useI18n();
   const { stakeholders, projects, activities, formats, removeStakeholder, removeProject, removeActivity, removeFormat } = useMasterStore();
   const entries = useEntriesStore((state) => state.entries);
   const showToast = useUiStore((state) => state.showToast);
+  // Role-based permissions:
+  // - Admin / solo: full access (edit any category, backup, restore, delete-all).
+  // - Mitarbeiter: may only add Stakeholder + Projekt; Format & Tätigkeit are read-only.
+  const isAdmin = useIsAdmin();
+  const isMitarbeiter = useIsMitarbeiter();
+  const isReadOnlyType = (type: 'stakeholder' | 'project' | 'activity' | 'format') =>
+    isMitarbeiter && (type === 'activity' || type === 'format');
 
   const [editingType, setEditingType] = useState<'stakeholder' | 'project' | 'activity' | 'format' | null>(null);
   const [editingOriginalName, setEditingOriginalName] = useState('');
@@ -289,10 +297,23 @@ export default function ManageView() {
     onAdd: (name: string) => void;
   }) => {
     const [newValue, setNewValue] = useState('');
+    const readOnly = isReadOnlyType(type);
 
     return (
       <div className="flex-1 card p-4 space-y-3">
-        <h3 style={{ color: 'var(--text)' }} className="text-lg font-semibold">{title}</h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 style={{ color: 'var(--text)' }} className="text-lg font-semibold">{title}</h3>
+          {readOnly && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-1 rounded"
+              style={{ background: 'rgba(155,142,196,0.1)', color: 'var(--neon-violet, #9B8EC4)' }}
+              title={t('manage.readonlyHint')}
+            >
+              <Lock className="w-3 h-3" />
+              {t('team.roleEmployee')}
+            </span>
+          )}
+        </div>
 
         <div className="space-y-2">
           {items.map((item) => (
@@ -301,7 +322,7 @@ export default function ManageView() {
               style={{ background: 'rgba(201, 169, 98, 0.03)', borderColor: 'var(--border)' }}
               className="flex items-center justify-between p-2 rounded border transition-colors hover:opacity-80"
             >
-              {editingType === type && editingOriginalName === item ? (
+              {!readOnly && editingType === type && editingOriginalName === item ? (
                 <input
                   id="manage-edit-name"
                   type="text"
@@ -323,59 +344,67 @@ export default function ManageView() {
               ) : (
                 <span style={{ color: 'var(--text-secondary)' }} className="flex-1">{item}</span>
               )}
-              <div className="flex gap-1">
-                <button
-                  onClick={() => {
-                    setEditingType(type);
-                    setEditingOriginalName(item);
-                    setEditingName(item);
-                  }}
-                  style={{ color: 'var(--text-secondary)' }}
-                  className="px-2 py-1 hover:opacity-60 transition-colors text-sm"
-                  title={t('title.rename')}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setDeleteItemPending({ type, name: item })}
-                  style={{ color: 'var(--text-secondary)' }}
-                  className="px-2 py-1 hover:opacity-60 transition-colors text-sm"
-                  title={t('title.delete')}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              {!readOnly && (
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => {
+                      setEditingType(type);
+                      setEditingOriginalName(item);
+                      setEditingName(item);
+                    }}
+                    style={{ color: 'var(--text-secondary)' }}
+                    className="px-2 py-1 hover:opacity-60 transition-colors text-sm"
+                    title={t('title.rename')}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteItemPending({ type, name: item })}
+                    style={{ color: 'var(--text-secondary)' }}
+                    className="px-2 py-1 hover:opacity-60 transition-colors text-sm"
+                    title={t('title.delete')}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
 
-        <div className="flex gap-2">
-          <input
-            id="manage-add-new"
-            type="text"
-            placeholder={t('manage.addNew')}
-            value={newValue}
-            onChange={(e) => setNewValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+        {!readOnly ? (
+          <div className="flex gap-2">
+            <input
+              id="manage-add-new"
+              type="text"
+              placeholder={t('manage.addNew')}
+              value={newValue}
+              onChange={(e) => setNewValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  onAdd(newValue);
+                  setNewValue('');
+                }
+              }}
+              className="input flex-1 text-sm"
+              aria-label={t('manage.addNew')}
+            />
+            <button
+              onClick={() => {
                 onAdd(newValue);
                 setNewValue('');
-              }
-            }}
-            className="input flex-1 text-sm"
-            aria-label={t('manage.addNew')}
-          />
-          <button
-            onClick={() => {
-              onAdd(newValue);
-              setNewValue('');
-            }}
-            style={{ background: 'var(--primary)', color: 'var(--bg)' }}
-            className="px-3 py-2 rounded font-medium transition-opacity hover:opacity-90 text-sm"
-          >
-            +
-          </button>
-        </div>
+              }}
+              style={{ background: 'var(--primary)', color: 'var(--bg)' }}
+              className="px-3 py-2 rounded font-medium transition-opacity hover:opacity-90 text-sm"
+            >
+              +
+            </button>
+          </div>
+        ) : (
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs italic">
+            {t('manage.readonlyHint')}
+          </p>
+        )}
       </div>
     );
   };
@@ -421,20 +450,24 @@ export default function ManageView() {
           >
             {t('btn.backup')}
           </button>
-          <label className="btn btn-primary cursor-pointer text-center">
-            {t('btn.restore')}
-            <input
-              id="manage-restore-file"
-              type="file"
-              accept=".json"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleBackupImport(file);
-              }}
-              className="hidden"
-              aria-label={t('btn.restore')}
-            />
-          </label>
+          {/* Restore & Import would let a Mitarbeiter overwrite Format/Tätigkeit master data,
+              which would defeat the read-only restriction → admin only. */}
+          {isAdmin && (
+            <label className="btn btn-primary cursor-pointer text-center">
+              {t('btn.restore')}
+              <input
+                id="manage-restore-file"
+                type="file"
+                accept=".json"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleBackupImport(file);
+                }}
+                className="hidden"
+                aria-label={t('btn.restore')}
+              />
+            </label>
+          )}
           <button
             onClick={handleCSVExport}
             className="btn btn-success"
@@ -442,20 +475,22 @@ export default function ManageView() {
           >
             {t('btn.csvExport')}
           </button>
-          <label className="btn btn-success cursor-pointer text-center disabled:opacity-50">
-            {t('btn.csvImport')}
-            <input
-              id="manage-csv-import"
-              type="file"
-              accept=".csv"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleCSVImport(file);
-              }}
-              className="hidden"
-              aria-label={t('btn.csvImport')}
-            />
-          </label>
+          {isAdmin && (
+            <label className="btn btn-success cursor-pointer text-center disabled:opacity-50">
+              {t('btn.csvImport')}
+              <input
+                id="manage-csv-import"
+                type="file"
+                accept=".csv"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleCSVImport(file);
+                }}
+                className="hidden"
+                aria-label={t('btn.csvImport')}
+              />
+            </label>
+          )}
         </div>
 
         <p style={{ color: 'var(--text-muted)' }} className="text-xs italic">{t('manage.backupHint')}</p>
@@ -485,7 +520,8 @@ export default function ManageView() {
         </div>
       </div>
 
-      {/* Delete All Data */}
+      {/* Delete All Data — admin only (would wipe Format/Tätigkeit master data otherwise) */}
+      {isAdmin && (
       <div className="card p-4 space-y-3" style={{ borderColor: 'rgba(212, 112, 110, 0.3)' }}>
         <h3 style={{ color: 'var(--danger)' }} className="text-lg font-semibold">{t('manage.warning')}</h3>
 
@@ -516,6 +552,7 @@ export default function ManageView() {
           </div>
         )}
       </div>
+      )}
 
       {/* Delete Item Confirmation */}
       <ConfirmDialog

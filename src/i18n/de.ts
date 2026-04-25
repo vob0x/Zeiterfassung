@@ -135,6 +135,7 @@ export const de = {
     projekte: "Projekt/Produkt",
     taetigkeiten: "Tätigkeit",
     formate: "Format",
+    readonlyHint: "Nur Admins können Format und Tätigkeit anpassen.",
     backup: "Backup & Wiederherstellung",
     csv: "CSV (nur Einträge)",
     noEntries: "Noch keine Einträge",
@@ -205,6 +206,13 @@ export const de = {
     scanFallback: "Nutze deine Handy-Kamera oder eine QR-App, um den Code zu scannen. Der Link öffnet die App und füllt den Code automatisch aus.",
     scanHint: "QR-Code in den Rahmen halten",
     cameraError: "Kamera-Zugriff nicht möglich. Bitte erlaube den Zugriff in den Browser-Einstellungen.",
+    roleAdmin: "Admin",
+    roleEmployee: "Mitarbeiter",
+    yourRole: "Deine Rolle",
+    employeeRestriction: "Als Mitarbeiter siehst du nur die Team-Totale.",
+    backToOverview: "Zurück zur Team-Übersicht",
+    viewingMember: "Du betrachtest die Daten von",
+    adminEditHint: "Als Admin kannst du Einträge dieses Mitglieds einsehen und bearbeiten.",
   },
 
   // KPIs

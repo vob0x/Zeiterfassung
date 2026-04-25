@@ -5,15 +5,17 @@ import { useEntriesStore, reEncryptEntriesForTeam } from '../../stores/entriesSt
 import { useMasterStore, syncAllMasterData } from '../../stores/masterStore';
 import { useUiStore } from '../../stores/uiStore';
 import { isSupabaseAvailable } from '../../lib/supabase';
+import { useIsMitarbeiter, useIsAdmin } from '../../hooks/useRole';
 import ConfirmDialog from '../UI/ConfirmDialog';
+import EditEntryModal from '../Entries/EditEntryModal';
 import { PeriodType, TimeEntry } from '@/types';
-import { formatDateISO, formatDateDE } from '../../lib/utils';
+import { formatDateISO, formatDateDE, formatDurationHM, getEffectiveDurationMs } from '../../lib/utils';
 import { TeamDaily } from './TeamDaily';
 import { TeamMatrix } from './TeamMatrix';
 import { TeamWorkload } from './TeamWorkload';
 import { TeamTimeline } from './TeamTimeline';
 import { useAuthStore } from '../../stores/authStore';
-import { Copy, Users, UserPlus, UserMinus, Wifi, WifiOff, QrCode, Camera, RefreshCw, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { Copy, Users, UserPlus, UserMinus, Wifi, WifiOff, QrCode, Camera, RefreshCw, ChevronLeft, ChevronRight, RotateCcw, Eye, ArrowLeft, Pencil, Trash2, ShieldCheck } from 'lucide-react';
 
 // Helper: get ISO week number
 function getISOWeek(date: Date): number {
@@ -36,8 +38,12 @@ export default function TeamView() {
   const profile = useAuthStore((s) => s.profile);
   const isCreator = team?.creator_id === profile?.id;
   const entries = useEntriesStore((state) => state.entries);
+  const deleteEntry = useEntriesStore((state) => state.delete);
   const showToast = useUiStore((state) => state.showToast);
   const { period, setTeamPeriod } = useTeamStore();
+  // Role gates: Mitarbeiter sees only KPI totals; Admin can drill into a member.
+  const isMitarbeiter = useIsMitarbeiter();
+  const isAdmin = useIsAdmin();
 
   const [teamName, setTeamName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -49,6 +55,12 @@ export default function TeamView() {
   const [showQR, setShowQR] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [teamOffset, setTeamOffset] = useState(0);
+  // Admin drill-down: when set, the team view focuses on a single member's entries
+  // (clickable in the member list). Identified by display_name (matching memberEntries map keys).
+  const [selectedMember, setSelectedMember] = useState<string | null>(null);
+  // Edit / delete state for admin acting on a teammate's entry
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
+  const [deletingEntry, setDeletingEntry] = useState<TimeEntry | null>(null);
 
   const monthNames = language === 'fr' ? MONTH_NAMES_FR : MONTH_NAMES_DE;
   const dayNames = language === 'fr' ? DAY_NAMES_FR : DAY_NAMES_DE;
@@ -468,15 +480,29 @@ export default function TeamView() {
               >
                 <QrCode className="w-3.5 h-3.5" />
               </button>
-              {/* Member avatars */}
+              {/* Member avatars — admin can click to drill into that member's data */}
               <div className="flex items-center gap-1 ml-auto flex-wrap">
               {members.map((m) => {
                 const isSelf = m.user_id === profile?.id;
+                const displayName = m.display_name || m.user_id;
+                const isClickable = isAdmin && !isSelf;
                 return (
                   <span key={m.id}
                     className="text-xs px-2 py-1 rounded-full font-medium inline-flex items-center gap-1"
                     style={{ background: 'rgba(155,142,196,0.1)', color: 'var(--neon-violet, #9B8EC4)' }}>
-                    {m.display_name || m.user_id}
+                    {isClickable ? (
+                      <button
+                        onClick={() => setSelectedMember(displayName)}
+                        className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity"
+                        style={{ color: 'inherit', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        title={t('team.viewingMember') + ' ' + displayName}
+                      >
+                        <Eye className="w-3 h-3" />
+                        {displayName}
+                      </button>
+                    ) : (
+                      <>{displayName}</>
+                    )}
                     {isCreator && !isSelf && (
                       <button
                         onClick={() => setRemovingMember(m.user_id)}
@@ -600,34 +626,91 @@ export default function TeamView() {
 
       {allTeamEntries.length === 0 ? (
         <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>{t('team.nodata')}</div>
+      ) : selectedMember && isAdmin ? (
+        // ── Admin drill-down: single-member dashboard with edit/delete affordances ──
+        <MemberDetailView
+          memberId={selectedMember}
+          entries={(filteredMemberEntries.get(selectedMember) || [])}
+          onBack={() => setSelectedMember(null)}
+          onEdit={(e) => setEditingEntry(e)}
+          onDelete={(e) => setDeletingEntry(e)}
+          backLabel={t('team.backToOverview')}
+          editLabel={t('title.edit')}
+          deleteLabel={t('title.delete')}
+          adminHint={t('team.adminEditHint')}
+          viewingMemberLabel={t('team.viewingMember')}
+        />
       ) : (
         <>
-          <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-            <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>{t('team.attendance')}</h3>
-            <TeamDaily memberEntries={filteredMemberEntries} entries={filterByPeriod(entries)} />
-          </div>
+          {isMitarbeiter ? (
+            <div
+              className="rounded-lg p-4 backdrop-blur-sm flex items-start gap-2"
+              style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+            >
+              <ShieldCheck className="w-4 h-4 mt-0.5" style={{ color: 'var(--neon-violet, #9B8EC4)' }} />
+              <span className="text-sm">{t('team.employeeRestriction')}</span>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+                <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>{t('team.attendance')}</h3>
+                <TeamDaily memberEntries={filteredMemberEntries} entries={filterByPeriod(entries)} />
+              </div>
 
-          <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-            <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>{t('team.shxperson')}</h3>
-            <TeamMatrix dimension="stakeholder" entries={allTeamEntries} members={members} />
-          </div>
+              <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+                <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>{t('team.shxperson')}</h3>
+                <TeamMatrix dimension="stakeholder" entries={allTeamEntries} members={members} />
+              </div>
 
-          <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-            <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>{t('team.prxperson')}</h3>
-            <TeamMatrix dimension="project" entries={allTeamEntries} members={members} />
-          </div>
+              <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+                <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>{t('team.prxperson')}</h3>
+                <TeamMatrix dimension="project" entries={allTeamEntries} members={members} />
+              </div>
 
-          <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-            <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>{t('team.workload')}</h3>
-            <TeamWorkload memberEntries={filteredMemberEntries} entries={allTeamEntries} />
-          </div>
+              <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+                <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>{t('team.workload')}</h3>
+                <TeamWorkload memberEntries={filteredMemberEntries} entries={allTeamEntries} />
+              </div>
 
-          <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-            <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>{t('team.timeline')}</h3>
-            <TeamTimeline memberEntries={filteredMemberEntries} members={members} />
-          </div>
+              <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+                <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text)' }}>{t('team.timeline')}</h3>
+                <TeamTimeline memberEntries={filteredMemberEntries} members={members} />
+              </div>
+            </>
+          )}
         </>
       )}
+
+      {/* Admin: edit modal for a teammate's entry — uses the existing EditEntryModal */}
+      {editingEntry && (
+        <EditEntryModal
+          entry={editingEntry}
+          isOpen={!!editingEntry}
+          onClose={() => setEditingEntry(null)}
+        />
+      )}
+
+      {/* Admin: delete-confirmation for a teammate's entry */}
+      <ConfirmDialog
+        isOpen={!!deletingEntry}
+        onClose={() => setDeletingEntry(null)}
+        title={t('confirm.delete')}
+        message={t('confirm.delete')}
+        confirmText={t('title.delete')}
+        cancelText={t('btn.cancel')}
+        onConfirm={async () => {
+          if (!deletingEntry) return;
+          try {
+            await deleteEntry(deletingEntry.id);
+            showToast(t('toast.entryDeleted'), 'success');
+          } catch (e) {
+            showToast(t('toast.error'), 'error');
+          } finally {
+            setDeletingEntry(null);
+          }
+        }}
+        isDanger
+      />
 
       {/* Remove Member Confirmation */}
       <ConfirmDialog
@@ -652,6 +735,158 @@ export default function TeamView() {
         onConfirm={handleLeaveTeam}
         isDanger
       />
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// MemberDetailView — shown when an admin clicks a team member chip.
+// Lists the selected member's entries (already period-filtered by the
+// parent) with summary KPIs at the top and edit/delete buttons per row.
+// Edit/delete go through the regular entriesStore so RLS/sync apply.
+// ────────────────────────────────────────────────────────────────────────
+interface MemberDetailViewProps {
+  memberId: string;
+  entries: TimeEntry[];
+  onBack: () => void;
+  onEdit: (e: TimeEntry) => void;
+  onDelete: (e: TimeEntry) => void;
+  backLabel: string;
+  editLabel: string;
+  deleteLabel: string;
+  adminHint: string;
+  viewingMemberLabel: string;
+}
+
+function MemberDetailView({
+  memberId,
+  entries,
+  onBack,
+  onEdit,
+  onDelete,
+  backLabel,
+  editLabel,
+  deleteLabel,
+  adminHint,
+  viewingMemberLabel,
+}: MemberDetailViewProps) {
+  // Sort newest first
+  const sorted = useMemo(
+    () =>
+      [...entries].sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+        return (b.start_time || '').localeCompare(a.start_time || '');
+      }),
+    [entries]
+  );
+
+  const totalMs = useMemo(
+    () => sorted.reduce((s, e) => s + getEffectiveDurationMs(e), 0),
+    [sorted]
+  );
+  const dayCount = useMemo(() => new Set(sorted.map((e) => e.date)).size, [sorted]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="px-3 py-2 rounded font-medium transition-all flex items-center gap-2"
+            style={{ background: 'var(--surface-solid)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {backLabel}
+          </button>
+          <div>
+            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{viewingMemberLabel}</div>
+            <h3 className="text-xl font-bold" style={{ color: 'var(--neon-violet, #9B8EC4)' }}>{memberId}</h3>
+          </div>
+        </div>
+        <div className="text-xs italic" style={{ color: 'var(--text-muted)' }}>
+          {adminHint}
+        </div>
+      </div>
+
+      {/* Mini KPIs for the focused member */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+          <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Total</div>
+          <div className="text-2xl font-bold" style={{ color: 'var(--neon-cyan)' }}>
+            {formatDurationHM(totalMs)}
+          </div>
+        </div>
+        <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+          <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Einträge</div>
+          <div className="text-2xl font-bold" style={{ color: 'var(--neon-violet, #9B8EC4)' }}>
+            {sorted.length}
+          </div>
+        </div>
+        <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+          <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Aktive Tage</div>
+          <div className="text-2xl font-bold" style={{ color: 'var(--success)' }}>
+            {dayCount}
+          </div>
+        </div>
+      </div>
+
+      {/* Entry list */}
+      {sorted.length === 0 ? (
+        <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>—</div>
+      ) : (
+        <div className="rounded-lg overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ background: 'var(--surface-solid)' }}>
+                <th className="p-2 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Datum</th>
+                <th className="p-2 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Stakeholder</th>
+                <th className="p-2 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Projekt</th>
+                <th className="p-2 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Tätigkeit</th>
+                <th className="p-2 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Format</th>
+                <th className="p-2 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>Dauer</th>
+                <th className="p-2 text-center font-semibold" style={{ color: 'var(--text-muted)' }}>{editLabel}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((e) => {
+                const sh = Array.isArray(e.stakeholder) ? e.stakeholder.join(', ') : e.stakeholder;
+                return (
+                  <tr key={e.id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td className="p-2" style={{ color: 'var(--text-secondary)' }}>{formatDateDE(e.date)}</td>
+                    <td className="p-2" style={{ color: 'var(--text)' }}>{sh}</td>
+                    <td className="p-2" style={{ color: 'var(--text)' }}>{e.projekt}</td>
+                    <td className="p-2" style={{ color: 'var(--text-secondary)' }}>{e.taetigkeit}</td>
+                    <td className="p-2" style={{ color: 'var(--text-muted)' }}>{e.format || '—'}</td>
+                    <td className="p-2 text-right font-mono" style={{ color: 'var(--text)' }}>
+                      {formatDurationHM(getEffectiveDurationMs(e))}
+                    </td>
+                    <td className="p-2 text-center">
+                      <div className="inline-flex gap-1">
+                        <button
+                          onClick={() => onEdit(e)}
+                          className="p-1 rounded transition-colors"
+                          style={{ color: 'var(--text-secondary)' }}
+                          title={editLabel}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onDelete(e)}
+                          className="p-1 rounded transition-colors"
+                          style={{ color: 'var(--danger)' }}
+                          title={deleteLabel}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
