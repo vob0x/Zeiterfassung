@@ -45,6 +45,8 @@ export const fr = {
     shortcutEmpty: "Chrono vide → attribuer plus tard",
     shortcutOrb: "Cliquer l'orbe → Play / Pause",
     shortcutStop: "Stop → Enregistrer & réinitialiser",
+    alreadyRunning: "Ce chrono est déjà en cours",
+    resumedExisting: "Chrono existant repris",
   },
   manual: {
     title: "Saisie manuelle",

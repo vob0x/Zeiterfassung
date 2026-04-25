@@ -45,6 +45,8 @@ export const de = {
     shortcutEmpty: "Leerer Timer → später zuordnen",
     shortcutOrb: "Orb klicken → Play / Pause",
     shortcutStop: "Stop → Speichern & zurücksetzen",
+    alreadyRunning: "Dieser Timer läuft bereits",
+    resumedExisting: "Bestehender Timer fortgesetzt",
   },
   manual: {
     title: "Manuell eintragen",

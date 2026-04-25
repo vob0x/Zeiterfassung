@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { useTimerStore } from '../../stores/timerStore';
+import { useTimerStore, findMatchingSlot } from '../../stores/timerStore';
 import { useEntriesStore } from '../../stores/entriesStore';
+import { useUiStore } from '../../stores/uiStore';
 import { useI18n } from '../../i18n';
 import { useIsMitarbeiter } from '../../hooks/useRole';
 import { formatDurationHM, getTodayISO, getEffectiveDurationMs } from '../../lib/utils';
@@ -32,6 +33,7 @@ const TimerView: React.FC = () => {
   const { t } = useI18n();
   const { taskSlots, addSlot, stopAllTimers, getSlotElapsed } = useTimerStore();
   const { entries } = useEntriesStore();
+  const showToast = useUiStore((s) => s.showToast);
   // Mitarbeiter sees a focused task list — no DayRing, no goal-reach animations.
   const isMitarbeiter = useIsMitarbeiter();
 
@@ -82,17 +84,31 @@ const TimerView: React.FC = () => {
     return segs;
   }, [taskSlots, todayTotalMs, getSlotElapsed, t]);
 
-  // Fuzzy search → create a new lane.
-  // If the search result didn't pin a specific Format / Tätigkeit, fall back
-  // to the default pair Einzelarbeit / Produktiv (UX request after 2-week pilot).
+  // Fuzzy search → create a new lane (or resume an existing match).
+  //
+  // Dedup guard: a stray click on the FuzzySearch top-result while a timer is
+  // already running used to spawn a second identical lane that started ticking
+  // alongside the first one — the source of duplicate entries on stop. Now we
+  // detect an exact dimension match against existing slots and either resume
+  // the paused match or surface a toast for the running one.
   const handleFuzzySelect = (combo: { stakeholder: string; projekt: string; taetigkeit: string; format: string }) => {
-    addSlot({
+    const dims = {
       stakeholder: [combo.stakeholder],
       projekt: combo.projekt,
       taetigkeit: combo.taetigkeit || 'Produktiv',
       format: combo.format || 'Einzelarbeit',
-      notiz: '',
-    });
+    };
+    const existing = findMatchingSlot(useTimerStore.getState().taskSlots, dims);
+    if (existing) {
+      if (existing.isPaused) {
+        useTimerStore.getState().resumeTimer(existing.id);
+        showToast(t('timer.resumedExisting'), 'info');
+      } else {
+        showToast(t('timer.alreadyRunning'), 'info');
+      }
+      return;
+    }
+    addSlot({ ...dims, notiz: '' });
     // Auto-start the new timer
     setTimeout(() => {
       const state = useTimerStore.getState();
@@ -104,8 +120,21 @@ const TimerView: React.FC = () => {
   };
 
   // "+" empty timer — defaults to Einzelarbeit / Produktiv per UX request.
+  // Dedup: if the user already has an empty unstarted timer, focus on it
+  // instead of stacking yet another empty lane.
   const handleAddEmpty = () => {
-    addSlot({ stakeholder: [], projekt: '', taetigkeit: 'Produktiv', format: 'Einzelarbeit', notiz: '' });
+    const dims = { stakeholder: [], projekt: '', taetigkeit: 'Produktiv', format: 'Einzelarbeit' };
+    const existing = findMatchingSlot(useTimerStore.getState().taskSlots, dims);
+    if (existing) {
+      if (existing.isPaused) {
+        useTimerStore.getState().resumeTimer(existing.id);
+        showToast(t('timer.resumedExisting'), 'info');
+      } else {
+        showToast(t('timer.alreadyRunning'), 'info');
+      }
+      return;
+    }
+    addSlot({ ...dims, notiz: '' });
     // Auto-start
     setTimeout(() => {
       const state = useTimerStore.getState();

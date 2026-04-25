@@ -73,6 +73,46 @@ function generateId(): string {
   return `slot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
+/**
+ * Compare two dimension sets for exact equivalence.
+ * Stakeholder is sorted before comparison so [A,B] and [B,A] are equal.
+ * Used for deduplication when creating new timers — avoids the bug where a
+ * stray click on the FuzzySearch top-result or a shortcut chip spawns a
+ * second copy of the timer the user already has running.
+ */
+export function dimensionsEqual(
+  a: { stakeholder: string[]; projekt: string; taetigkeit: string; format: string },
+  b: { stakeholder: string[]; projekt: string; taetigkeit: string; format: string }
+): boolean {
+  if ((a.projekt || '') !== (b.projekt || '')) return false;
+  if ((a.taetigkeit || '') !== (b.taetigkeit || '')) return false;
+  if ((a.format || '') !== (b.format || '')) return false;
+  const sa = [...(a.stakeholder || [])].sort();
+  const sb = [...(b.stakeholder || [])].sort();
+  if (sa.length !== sb.length) return false;
+  for (let i = 0; i < sa.length; i++) {
+    if (sa[i] !== sb[i]) return false;
+  }
+  return true;
+}
+
+/**
+ * Find an existing slot that matches the given dimensions. Returns the
+ * matching slot or undefined. Caller decides what to do with the match
+ * (typically: resume if paused, no-op + toast if already running).
+ */
+export function findMatchingSlot(
+  slots: TimerSlot[],
+  dims: { stakeholder: string[]; projekt: string; taetigkeit: string; format: string }
+): TimerSlot | undefined {
+  return slots.find((s) => dimensionsEqual({
+    stakeholder: s.stakeholder,
+    projekt: s.projekt,
+    taetigkeit: s.taetigkeit,
+    format: s.format,
+  }, dims));
+}
+
 function ensureTickInterval(get: () => TimerState, set: (partial: Partial<TimerState>) => void) {
   const state = get();
   if (!state.tickInterval) {

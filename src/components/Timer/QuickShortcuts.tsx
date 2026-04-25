@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useTimerStore } from '../../stores/timerStore';
+import { useTimerStore, findMatchingSlot } from '../../stores/timerStore';
 import { useEntriesStore } from '../../stores/entriesStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useUiStore } from '../../stores/uiStore';
 import { useI18n } from '../../i18n';
 import { Pin, X } from 'lucide-react';
 import { getUserData, setUserData } from '@/lib/userStorage';
@@ -84,6 +85,7 @@ const QuickShortcuts: React.FC = () => {
   const { t } = useI18n();
   const { addSlot } = useTimerStore();
   const { entries } = useEntriesStore();
+  const showToast = useUiStore((s) => s.showToast);
   const [pinnedShortcuts, setPinnedShortcuts] = useState<ShortcutItem[]>(() => {
     return getUserData<ShortcutItem[]>('pinnedShortcuts', []);
   });
@@ -147,14 +149,27 @@ const QuickShortcuts: React.FC = () => {
 
   // Handle shortcut click — defaults Tätigkeit to Produktiv when the
   // shortcut doesn't pin a specific activity.
+  // Dedup: if the user already has a slot with these exact dimensions, don't
+  // create a duplicate (this was the source of the "two identical timers"
+  // bug from the use-case report).
   const handleShortcutClick = (shortcut: ShortcutItem) => {
-    addSlot({
+    const dims = {
       stakeholder: [shortcut.stakeholder],
       projekt: shortcut.projekt,
       taetigkeit: shortcut.taetigkeit || 'Produktiv',
       format: 'Einzelarbeit',
-      notiz: '',
-    });
+    };
+    const existing = findMatchingSlot(useTimerStore.getState().taskSlots, dims);
+    if (existing) {
+      if (existing.isPaused) {
+        useTimerStore.getState().resumeTimer(existing.id);
+        showToast(t('timer.resumedExisting'), 'info');
+      } else {
+        showToast(t('timer.alreadyRunning'), 'info');
+      }
+      return;
+    }
+    addSlot({ ...dims, notiz: '' });
   };
 
   // Delete a shortcut (remove from pinned, hide auto-generated ones)
