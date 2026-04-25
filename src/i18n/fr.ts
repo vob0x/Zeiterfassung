@@ -162,6 +162,30 @@ export const fr = {
     dupHint: "Par groupe, la première entrée est conservée, les autres sont proposées à la suppression.",
   },
 
+  // Batch-Edit (Admin)
+  batch: {
+    title: "Modification par lots",
+    subtitle: "Modifier ou renommer plusieurs entrées en une seule fois",
+    intro: "Choisissez les critères de filtrage, définissez les nouvelles valeurs et appliquez-les à toutes les entrées correspondantes. Action sur toute l'équipe (vos entrées + celles des membres).",
+    filterTitle: "1. Filtre",
+    changesTitle: "2. Nouvelles valeurs",
+    changesHint: "Seuls les champs cochés sont modifiés. Champ vide = la valeur est effacée.",
+    matchedSuffix: "entrées concernées",
+    notizContains: "La note contient...",
+    allMembers: "Tous les membres",
+    empty: "(vide)",
+    emptyMark: "—",
+    apply: "Appliquer",
+    noChanges: "Aucune valeur cible sélectionnée",
+    noMatches: "Aucune entrée correspondante",
+    confirmTitle: "Confirmer la modification par lots",
+    confirmIntro: "Cette modification s'applique à toutes les entrées filtrées et ne peut être annulée qu'individuellement.",
+    updatedSuffix: "entrées mises à jour",
+    failedSuffix: "erreurs",
+    clearWarning: "Au moins un champ sera vidé — vérifiez attentivement.",
+    more: "autres",
+  },
+
   // Team Section
   team: {
     setupText: "Configuration de l'équipe",

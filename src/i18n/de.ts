@@ -162,6 +162,30 @@ export const de = {
     dupHint: "Pro Gruppe wird der erste Eintrag behalten, die restlichen zum Entfernen vorgeschlagen.",
   },
 
+  // Batch-Edit (Admin)
+  batch: {
+    title: "Batch-Bearbeitung",
+    subtitle: "Mehrere Einträge gleichzeitig umbuchen oder umbenennen",
+    intro: "Wähle die Filterkriterien, definiere die neuen Werte und wende sie auf alle passenden Einträge an. Wirkt teamweit (eigene + Teammitglieder).",
+    filterTitle: "1. Filter",
+    changesTitle: "2. Neue Werte",
+    changesHint: "Nur Felder mit gesetzter Checkbox werden geändert. Leeres Feld = Wert wird geleert.",
+    matchedSuffix: "Einträge betroffen",
+    notizContains: "Notiz enthält...",
+    allMembers: "Alle Mitglieder",
+    empty: "(leer)",
+    emptyMark: "—",
+    apply: "Anwenden",
+    noChanges: "Keine Zielwerte gewählt",
+    noMatches: "Keine passenden Einträge",
+    confirmTitle: "Batch-Änderung bestätigen",
+    confirmIntro: "Diese Änderung wirkt sich auf alle gefilterten Einträge aus und kann nur einzeln rückgängig gemacht werden.",
+    updatedSuffix: "Einträge aktualisiert",
+    failedSuffix: "Fehler",
+    clearWarning: "Mindestens ein Feld wird auf 'leer' gesetzt — bitte sorgfältig prüfen.",
+    more: "weitere",
+  },
+
   // Team Section
   team: {
     setupText: "Team-Setup",

@@ -8,6 +8,7 @@ import { clearAllUserData } from '../../lib/userStorage';
 import { useIsAdmin, useIsMitarbeiter } from '../../hooks/useRole';
 import ConfirmDialog from '../UI/ConfirmDialog';
 import DuplicateReview from './DuplicateReview';
+import BatchEditPanel from './BatchEditPanel';
 import { Pencil, Trash2, Search, Lock } from 'lucide-react';
 
 export default function ManageView() {
@@ -438,6 +439,9 @@ export default function ManageView() {
           onAdd={(name) => handleAddItem('activity', name)}
         />
       </div>
+
+      {/* Batch-Edit Panel — admin only */}
+      {isAdmin && <BatchEditPanel />}
 
       {/* Backup & Restore Section */}
       <div className="card p-4 space-y-3">

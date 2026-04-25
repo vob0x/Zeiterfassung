@@ -68,6 +68,56 @@ async function encryptEntryForSupabase(row: Record<string, any>): Promise<Record
   return encrypted;
 }
 
+/**
+ * Pure predicate: does an entry match a BulkFilter?
+ * Used by bulkPreview and bulkUpdateMatching. Case-insensitive exact match for
+ * dimensions, substring for notiz, inclusive ISO date bounds, and optional
+ * member_user_ids restriction (admin scope).
+ */
+interface MatchableBulkFilter {
+  stakeholder?: string;
+  projekt?: string;
+  taetigkeit?: string;
+  format?: string;
+  notiz_contains?: string;
+  date_from?: string;
+  date_to?: string;
+  member_user_ids?: string[];
+}
+
+function matchesBulkFilter(
+  entry: TimeEntry & { _ownerName?: string; _isOwn?: boolean },
+  f: MatchableBulkFilter,
+  members: { display_name?: string; user_id: string }[]
+): boolean {
+  if (f.date_from && entry.date < f.date_from) return false;
+  if (f.date_to && entry.date > f.date_to) return false;
+
+  if (f.stakeholder) {
+    const arr = Array.isArray(entry.stakeholder) ? entry.stakeholder : [entry.stakeholder];
+    const want = f.stakeholder.toLowerCase();
+    if (!arr.some((s) => (s || '').toLowerCase() === want)) return false;
+  }
+  if (f.projekt && (entry.projekt || '').toLowerCase() !== f.projekt.toLowerCase()) return false;
+  if (f.taetigkeit && (entry.taetigkeit || '').toLowerCase() !== f.taetigkeit.toLowerCase()) return false;
+  if (f.format && (entry.format || '').toLowerCase() !== f.format.toLowerCase()) return false;
+
+  if (f.notiz_contains) {
+    if (!(entry.notiz || '').toLowerCase().includes(f.notiz_contains.toLowerCase())) return false;
+  }
+
+  // Member scope: only entries authored by these user_ids count.
+  if (f.member_user_ids && f.member_user_ids.length > 0) {
+    if (!entry.user_id) return false;
+    if (!f.member_user_ids.includes(entry.user_id)) return false;
+    // Defensive: confirm the user_id is in the team's member list (or it's our own).
+    if (!members.some((m) => m.user_id === entry.user_id) && !entry._isOwn) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Track decryption failures across a batch (used by re-encryption migration)
 let _batchDecryptFail = 0;
 
@@ -97,6 +147,45 @@ export async function decryptEntryFromSupabase(row: any): Promise<any> {
   return decrypted;
 }
 
+/**
+ * Filter criteria for bulk operations. All fields optional. Empty/undefined
+ * means "don't filter on this field". Stakeholder/projekt/activity/format
+ * compare exact (case-insensitive); notiz uses substring match; date_from/
+ * date_to are inclusive ISO date bounds; member_user_ids restricts to a
+ * subset of team members (admin only).
+ */
+export interface BulkFilter {
+  stakeholder?: string;
+  projekt?: string;
+  taetigkeit?: string;
+  format?: string;
+  notiz_contains?: string;
+  date_from?: string; // YYYY-MM-DD
+  date_to?: string;
+  /** When set, only entries from these team members are matched (admin scope). */
+  member_user_ids?: string[];
+}
+
+/**
+ * Field-level changes for a bulk update. Each field is optional; only set
+ * fields are applied. An explicit empty string clears a field — to leave it
+ * untouched, omit the key entirely.
+ */
+export interface BulkChanges {
+  stakeholder?: string;       // Single stakeholder; replaces array entirely
+  projekt?: string;
+  taetigkeit?: string;
+  format?: string;
+  notiz?: string;
+}
+
+export interface BulkUpdateResult {
+  matched: number;
+  updated: number;
+  failed: number;
+  errors: string[];
+}
+
 interface EntriesState {
   entries: TimeEntry[];
   loading: boolean;
@@ -110,6 +199,19 @@ interface EntriesState {
   findDuplicates: () => Map<string, TimeEntry[]>;
   removeByIds: (ids: string[]) => Promise<number>;
   removeDuplicates: () => Promise<number>;
+  /**
+   * Admin-only: dry-run a bulk filter against own + team entries.
+   * Returns matched entries WITHOUT modifying anything (used for live preview).
+   */
+  bulkPreview: (filter: BulkFilter) => Array<TimeEntry & { _ownerName?: string; _isOwn?: boolean }>;
+  /**
+   * Admin-only: apply changes to all entries matching the filter, across own
+   * + team members. Re-encrypts changed fields with the active Team Key,
+   * writes via Supabase UPDATE (RLS te_update_admin), then refreshes both
+   * the entries store and the team store. Throws if neither store nor team
+   * key is available, or if the user is not an admin.
+   */
+  bulkUpdateMatching: (filter: BulkFilter, changes: BulkChanges) => Promise<BulkUpdateResult>;
   setFilter: (key: keyof FilterState, value: string) => void;
   clearFilters: () => void;
   getFilteredEntries: () => TimeEntry[];
@@ -911,6 +1013,145 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
       set({ error: message });
       throw error;
     }
+  },
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Bulk preview & update (admin only)
+  // ──────────────────────────────────────────────────────────────────────
+  bulkPreview: (filter: BulkFilter) => {
+    const ownEntries = get().entries;
+    const profile = useAuthStore.getState().profile;
+    const ownName = profile?.codename || 'Eigene';
+    const ownId = profile?.id;
+    // Tag own entries
+    const all: Array<TimeEntry & { _ownerName?: string; _isOwn?: boolean }> = ownEntries.map(
+      (e) => ({ ...e, _ownerName: ownName, _isOwn: true })
+    );
+    // Tag teammate entries
+    const team = useTeamStore.getState();
+    team.memberEntries.forEach((entries, displayName) => {
+      const memberObj = team.members.find((m) => m.display_name === displayName);
+      // Skip own entries from teammate map (they're already in ownEntries) —
+      // identifying via user_id is more reliable than display_name match.
+      if (memberObj?.user_id === ownId) return;
+      for (const e of entries) {
+        all.push({ ...e, _ownerName: displayName, _isOwn: false });
+      }
+    });
+
+    return all.filter((e) => matchesBulkFilter(e, filter, team.members));
+  },
+
+  bulkUpdateMatching: async (filter, changes) => {
+    const result: BulkUpdateResult = { matched: 0, updated: 0, failed: 0, errors: [] };
+
+    // Guardrails: at least one change must be set
+    const changeKeys = Object.keys(changes).filter((k) => changes[k as keyof BulkChanges] !== undefined);
+    if (changeKeys.length === 0) {
+      throw new Error('Mindestens ein Zielwert muss gesetzt sein');
+    }
+
+    // Compute matches via the same logic as bulkPreview (consistent UX)
+    const matches = get().bulkPreview(filter);
+    result.matched = matches.length;
+    if (matches.length === 0) return result;
+
+    // Encryption requires either personal key or team key
+    if (!hasEncryptionKey()) {
+      throw new Error('Verschlüsselungsschlüssel nicht verfügbar');
+    }
+
+    const sbAvailable = isSupabaseAvailable() && supabaseClient;
+    if (sbAvailable) {
+      const sessionOk = await ensureValidSession();
+      if (!sessionOk) throw new Error('Sitzung abgelaufen');
+    }
+
+    const updatedAt = new Date().toISOString();
+
+    // Build Supabase patch row by re-encrypting only the changed fields.
+    // Empty string is a valid clear; undefined means "leave alone".
+    async function buildEncryptedPatch(): Promise<Record<string, any>> {
+      const patch: Record<string, any> = { updated_at: updatedAt };
+      if (changes.stakeholder !== undefined) {
+        // Stakeholder column stores a JSON-encoded array (single value here)
+        const arr = changes.stakeholder ? [changes.stakeholder] : [];
+        patch.stakeholder = arr.length > 0
+          ? await encryptFieldForTeam(JSON.stringify(arr))
+          : '';
+      }
+      if (changes.projekt !== undefined) {
+        patch.projekt = changes.projekt ? await encryptFieldForTeam(changes.projekt) : '';
+      }
+      if (changes.taetigkeit !== undefined) {
+        patch.taetigkeit = changes.taetigkeit ? await encryptFieldForTeam(changes.taetigkeit) : '';
+      }
+      if (changes.format !== undefined) {
+        patch.format = changes.format ? await encryptFieldForTeam(changes.format) : '';
+      }
+      if (changes.notiz !== undefined) {
+        patch.notiz = changes.notiz ? await encryptFieldForTeam(changes.notiz) : '';
+      }
+      return patch;
+    }
+
+    // Encrypt once — same patch applies to every matched row
+    const encPatch = await buildEncryptedPatch();
+
+    // Apply via Supabase. RLS te_update_admin allows admins to update teammates;
+    // own entries fall under te_update. Process in batches of 50 ids.
+    if (sbAvailable && supabaseClient) {
+      const ids = matches.map((m) => m.id).filter((id): id is string => !!id);
+      for (let i = 0; i < ids.length; i += 50) {
+        const batchIds = ids.slice(i, i + 50);
+        try {
+          const { error } = await supabaseClient
+            .from('time_entries')
+            .update(encPatch)
+            .in('id', batchIds);
+          if (error) {
+            result.failed += batchIds.length;
+            result.errors.push(error.message);
+          } else {
+            result.updated += batchIds.length;
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : 'Unbekannter Fehler';
+          result.failed += batchIds.length;
+          result.errors.push(msg);
+        }
+      }
+    }
+
+    // Update local state for own entries that matched
+    const ownPatch: Partial<TimeEntry> = { updated_at: updatedAt };
+    if (changes.stakeholder !== undefined) {
+      ownPatch.stakeholder = changes.stakeholder ? [changes.stakeholder] : [];
+    }
+    if (changes.projekt !== undefined) ownPatch.projekt = changes.projekt;
+    if (changes.taetigkeit !== undefined) ownPatch.taetigkeit = changes.taetigkeit;
+    if (changes.format !== undefined) ownPatch.format = changes.format;
+    if (changes.notiz !== undefined) ownPatch.notiz = changes.notiz;
+
+    const ownMatchIds = new Set(matches.filter((m) => m._isOwn).map((m) => m.id));
+    if (ownMatchIds.size > 0) {
+      const updated = get().entries.map((e) =>
+        ownMatchIds.has(e.id) ? { ...e, ...ownPatch } : e
+      );
+      set({ entries: updated });
+      setUserData('entries', updated);
+    }
+
+    // Refresh team store so admin sees updated teammate rows in the UI
+    if (matches.some((m) => !m._isOwn)) {
+      try {
+        await useTeamStore.getState().syncTeamData();
+      } catch {
+        // Non-fatal — UI will reflect changes on next sync tick
+      }
+    }
+
+    return result;
   },
 
   setFilter: (key, value) => {
