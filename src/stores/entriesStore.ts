@@ -118,6 +118,117 @@ function matchesBulkFilter(
   return true;
 }
 
+/**
+ * Core "apply changes to a list of matched entries" routine. Shared by
+ * bulkUpdateMatching (filter-driven) and bulkUpdateByIds (selection-driven).
+ *
+ * Re-encrypts only the changed fields once with the active Team Key, then
+ * batches Supabase UPDATE…IN(50 ids) calls. Updates local state for any
+ * matched own-entry rows, and triggers a team sync for teammate rows so the
+ * Team view reflects the change.
+ */
+async function applyBulkUpdate(
+  matches: Array<TimeEntry & { _ownerName?: string; _isOwn?: boolean }>,
+  changes: BulkChanges,
+  get: () => any,
+  set: (partial: any) => void
+): Promise<BulkUpdateResult> {
+  const result: BulkUpdateResult = { matched: matches.length, updated: 0, failed: 0, errors: [] };
+
+  const changeKeys = Object.keys(changes).filter((k) => changes[k as keyof BulkChanges] !== undefined);
+  if (changeKeys.length === 0) {
+    throw new Error('Mindestens ein Zielwert muss gesetzt sein');
+  }
+  if (matches.length === 0) return result;
+
+  if (!hasEncryptionKey()) {
+    throw new Error('Verschlüsselungsschlüssel nicht verfügbar');
+  }
+
+  const sbAvailable = isSupabaseAvailable() && supabaseClient;
+  if (sbAvailable) {
+    const sessionOk = await ensureValidSession();
+    if (!sessionOk) throw new Error('Sitzung abgelaufen');
+  }
+
+  const updatedAt = new Date().toISOString();
+
+  // Build Supabase patch row by re-encrypting only the changed fields.
+  // Empty string is a valid clear; undefined means "leave alone".
+  const encPatch: Record<string, any> = { updated_at: updatedAt };
+  if (changes.stakeholder !== undefined) {
+    const arr = changes.stakeholder ? [changes.stakeholder] : [];
+    encPatch.stakeholder = arr.length > 0
+      ? await encryptFieldForTeam(JSON.stringify(arr))
+      : '';
+  }
+  if (changes.projekt !== undefined) {
+    encPatch.projekt = changes.projekt ? await encryptFieldForTeam(changes.projekt) : '';
+  }
+  if (changes.taetigkeit !== undefined) {
+    encPatch.taetigkeit = changes.taetigkeit ? await encryptFieldForTeam(changes.taetigkeit) : '';
+  }
+  if (changes.format !== undefined) {
+    encPatch.format = changes.format ? await encryptFieldForTeam(changes.format) : '';
+  }
+  if (changes.notiz !== undefined) {
+    encPatch.notiz = changes.notiz ? await encryptFieldForTeam(changes.notiz) : '';
+  }
+
+  if (sbAvailable && supabaseClient) {
+    const ids = matches.map((m) => m.id).filter((id): id is string => !!id);
+    for (let i = 0; i < ids.length; i += 50) {
+      const batchIds = ids.slice(i, i + 50);
+      try {
+        const { error } = await supabaseClient
+          .from('time_entries')
+          .update(encPatch)
+          .in('id', batchIds);
+        if (error) {
+          result.failed += batchIds.length;
+          result.errors.push(error.message);
+        } else {
+          result.updated += batchIds.length;
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Unbekannter Fehler';
+        result.failed += batchIds.length;
+        result.errors.push(msg);
+      }
+    }
+  }
+
+  // Local state update for own matches
+  const ownPatch: Partial<TimeEntry> = { updated_at: updatedAt };
+  if (changes.stakeholder !== undefined) {
+    ownPatch.stakeholder = changes.stakeholder ? [changes.stakeholder] : [];
+  }
+  if (changes.projekt !== undefined) ownPatch.projekt = changes.projekt;
+  if (changes.taetigkeit !== undefined) ownPatch.taetigkeit = changes.taetigkeit;
+  if (changes.format !== undefined) ownPatch.format = changes.format;
+  if (changes.notiz !== undefined) ownPatch.notiz = changes.notiz;
+
+  const ownMatchIds = new Set(matches.filter((m) => m._isOwn).map((m) => m.id));
+  if (ownMatchIds.size > 0) {
+    const updated = get().entries.map((e: TimeEntry) =>
+      ownMatchIds.has(e.id) ? { ...e, ...ownPatch } : e
+    );
+    set({ entries: updated });
+    setUserData('entries', updated);
+  }
+
+  // Refresh team store so admin sees updated teammate rows in the UI
+  if (matches.some((m) => !m._isOwn)) {
+    try {
+      await useTeamStore.getState().syncTeamData();
+    } catch {
+      // Non-fatal — UI will reflect changes on next sync tick
+    }
+  }
+
+  return result;
+}
+
 // Track decryption failures across a batch (used by re-encryption migration)
 let _batchDecryptFail = 0;
 
@@ -212,6 +323,14 @@ interface EntriesState {
    * key is available, or if the user is not an admin.
    */
   bulkUpdateMatching: (filter: BulkFilter, changes: BulkChanges) => Promise<BulkUpdateResult>;
+  /**
+   * Admin-only: apply changes to an explicit list of entry IDs. Used by the
+   * BatchEditPanel after the user has hand-picked which of the filter
+   * matches to actually modify (via checkboxes). Behavior is otherwise
+   * identical to bulkUpdateMatching — same encryption, same RLS path,
+   * same store refresh.
+   */
+  bulkUpdateByIds: (ids: string[], changes: BulkChanges) => Promise<BulkUpdateResult>;
   setFilter: (key: keyof FilterState, value: string) => void;
   clearFilters: () => void;
   getFilteredEntries: () => TimeEntry[];
@@ -1043,115 +1162,33 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
   },
 
   bulkUpdateMatching: async (filter, changes) => {
-    const result: BulkUpdateResult = { matched: 0, updated: 0, failed: 0, errors: [] };
-
-    // Guardrails: at least one change must be set
-    const changeKeys = Object.keys(changes).filter((k) => changes[k as keyof BulkChanges] !== undefined);
-    if (changeKeys.length === 0) {
-      throw new Error('Mindestens ein Zielwert muss gesetzt sein');
-    }
-
-    // Compute matches via the same logic as bulkPreview (consistent UX)
+    // Filter-driven entry point: derive matches via bulkPreview, then defer
+    // to the shared core implementation.
     const matches = get().bulkPreview(filter);
-    result.matched = matches.length;
-    if (matches.length === 0) return result;
+    return applyBulkUpdate(matches, changes, get, set);
+  },
 
-    // Encryption requires either personal key or team key
-    if (!hasEncryptionKey()) {
-      throw new Error('Verschlüsselungsschlüssel nicht verfügbar');
+  bulkUpdateByIds: async (ids, changes) => {
+    // ID-driven entry point: collect the matching entries from own + team
+    // stores in the same shape the core expects, then defer.
+    const idSet = new Set(ids);
+    const ownEntries = get().entries;
+    const profile = useAuthStore.getState().profile;
+    const ownName = profile?.codename || 'Eigene';
+    const ownId = profile?.id;
+    const collected: Array<TimeEntry & { _ownerName?: string; _isOwn?: boolean }> = [];
+    for (const e of ownEntries) {
+      if (idSet.has(e.id)) collected.push({ ...e, _ownerName: ownName, _isOwn: true });
     }
-
-    const sbAvailable = isSupabaseAvailable() && supabaseClient;
-    if (sbAvailable) {
-      const sessionOk = await ensureValidSession();
-      if (!sessionOk) throw new Error('Sitzung abgelaufen');
-    }
-
-    const updatedAt = new Date().toISOString();
-
-    // Build Supabase patch row by re-encrypting only the changed fields.
-    // Empty string is a valid clear; undefined means "leave alone".
-    async function buildEncryptedPatch(): Promise<Record<string, any>> {
-      const patch: Record<string, any> = { updated_at: updatedAt };
-      if (changes.stakeholder !== undefined) {
-        // Stakeholder column stores a JSON-encoded array (single value here)
-        const arr = changes.stakeholder ? [changes.stakeholder] : [];
-        patch.stakeholder = arr.length > 0
-          ? await encryptFieldForTeam(JSON.stringify(arr))
-          : '';
+    const team = useTeamStore.getState();
+    team.memberEntries.forEach((entries, displayName) => {
+      const memberObj = team.members.find((m) => m.display_name === displayName);
+      if (memberObj?.user_id === ownId) return; // already in own
+      for (const e of entries) {
+        if (idSet.has(e.id)) collected.push({ ...e, _ownerName: displayName, _isOwn: false });
       }
-      if (changes.projekt !== undefined) {
-        patch.projekt = changes.projekt ? await encryptFieldForTeam(changes.projekt) : '';
-      }
-      if (changes.taetigkeit !== undefined) {
-        patch.taetigkeit = changes.taetigkeit ? await encryptFieldForTeam(changes.taetigkeit) : '';
-      }
-      if (changes.format !== undefined) {
-        patch.format = changes.format ? await encryptFieldForTeam(changes.format) : '';
-      }
-      if (changes.notiz !== undefined) {
-        patch.notiz = changes.notiz ? await encryptFieldForTeam(changes.notiz) : '';
-      }
-      return patch;
-    }
-
-    // Encrypt once — same patch applies to every matched row
-    const encPatch = await buildEncryptedPatch();
-
-    // Apply via Supabase. RLS te_update_admin allows admins to update teammates;
-    // own entries fall under te_update. Process in batches of 50 ids.
-    if (sbAvailable && supabaseClient) {
-      const ids = matches.map((m) => m.id).filter((id): id is string => !!id);
-      for (let i = 0; i < ids.length; i += 50) {
-        const batchIds = ids.slice(i, i + 50);
-        try {
-          const { error } = await supabaseClient
-            .from('time_entries')
-            .update(encPatch)
-            .in('id', batchIds);
-          if (error) {
-            result.failed += batchIds.length;
-            result.errors.push(error.message);
-          } else {
-            result.updated += batchIds.length;
-          }
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : 'Unbekannter Fehler';
-          result.failed += batchIds.length;
-          result.errors.push(msg);
-        }
-      }
-    }
-
-    // Update local state for own entries that matched
-    const ownPatch: Partial<TimeEntry> = { updated_at: updatedAt };
-    if (changes.stakeholder !== undefined) {
-      ownPatch.stakeholder = changes.stakeholder ? [changes.stakeholder] : [];
-    }
-    if (changes.projekt !== undefined) ownPatch.projekt = changes.projekt;
-    if (changes.taetigkeit !== undefined) ownPatch.taetigkeit = changes.taetigkeit;
-    if (changes.format !== undefined) ownPatch.format = changes.format;
-    if (changes.notiz !== undefined) ownPatch.notiz = changes.notiz;
-
-    const ownMatchIds = new Set(matches.filter((m) => m._isOwn).map((m) => m.id));
-    if (ownMatchIds.size > 0) {
-      const updated = get().entries.map((e) =>
-        ownMatchIds.has(e.id) ? { ...e, ...ownPatch } : e
-      );
-      set({ entries: updated });
-      setUserData('entries', updated);
-    }
-
-    // Refresh team store so admin sees updated teammate rows in the UI
-    if (matches.some((m) => !m._isOwn)) {
-      try {
-        await useTeamStore.getState().syncTeamData();
-      } catch {
-        // Non-fatal — UI will reflect changes on next sync tick
-      }
-    }
-
-    return result;
+    });
+    return applyBulkUpdate(collected, changes, get, set);
   },
 
   setFilter: (key, value) => {

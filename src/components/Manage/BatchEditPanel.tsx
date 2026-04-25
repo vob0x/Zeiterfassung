@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../i18n';
 import { useEntriesStore } from '../../stores/entriesStore';
 import { useMasterStore } from '../../stores/masterStore';
 import { useTeamStore } from '../../stores/teamStore';
 import { useUiStore } from '../../stores/uiStore';
 import type { BulkFilter, BulkChanges } from '../../stores/entriesStore';
-import { ChevronDown, ChevronRight, Wand2, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronRight, Wand2, AlertTriangle, CheckSquare, Square } from 'lucide-react';
 import ConfirmDialog from '../UI/ConfirmDialog';
 import { formatDateDE, formatDurationHM, getEffectiveDurationMs } from '../../lib/utils';
 
@@ -48,12 +48,53 @@ export default function BatchEditPanel() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [running, setRunning] = useState(false);
 
+  // Per-row selection — admin can uncheck individual entries from the
+  // filter result before applying. Default: all currently-matched entries
+  // are selected. We re-seed the selection whenever the match set changes.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   const setF = <K extends keyof BulkFilter>(key: K, value: BulkFilter[K]) => {
     setFilter((prev) => ({ ...prev, [key]: value || undefined }));
   };
 
   // Live preview: re-evaluates whenever filter or store contents change
   const matches = useEntriesStore((s) => s.bulkPreview)(filter);
+
+  // Track the fingerprint of the current match set; when it changes, reset
+  // the selection to "all selected" (most natural default after a filter
+  // tweak). Uses a sorted-id-string fingerprint to avoid re-running this
+  // when only the entry order changes.
+  const matchFingerprint = useMemo(
+    () => matches.map((m) => m.id).sort().join('|'),
+    [matches]
+  );
+  const lastFingerprintRef = useRef<string>('');
+  useEffect(() => {
+    if (matchFingerprint === lastFingerprintRef.current) return;
+    lastFingerprintRef.current = matchFingerprint;
+    setSelectedIds(new Set(matches.map((m) => m.id).filter((id): id is string => !!id)));
+  }, [matchFingerprint, matches]);
+
+  const selectedCount = selectedIds.size;
+  const allSelected = matches.length > 0 && selectedCount === matches.length;
+  const noneSelected = selectedCount === 0;
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(matches.map((m) => m.id).filter((id): id is string => !!id)));
+    }
+  }
+
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // Build the BulkChanges payload from the apply-toggles and inputs
   const changes: BulkChanges = useMemo(() => {
@@ -68,15 +109,15 @@ export default function BatchEditPanel() {
       chgStakeholder, chgProjekt, chgTaetigkeit, chgFormat, chgNotiz]);
 
   const hasChanges = Object.keys(changes).length > 0;
-  const canApply = matches.length > 0 && hasChanges && !running;
+  const canApply = selectedCount > 0 && hasChanges && !running;
 
   const inputCls = 'select text-sm';
-  const previewSlice = matches.slice(0, 5);
 
   async function handleApply() {
     setRunning(true);
     try {
-      const result = await useEntriesStore.getState().bulkUpdateMatching(filter, changes);
+      const ids = Array.from(selectedIds);
+      const result = await useEntriesStore.getState().bulkUpdateByIds(ids, changes);
       if (result.failed === 0) {
         showToast(`${result.updated} ${t('batch.updatedSuffix')}`, 'success');
       } else {
@@ -193,39 +234,124 @@ export default function BatchEditPanel() {
             </div>
           </div>
 
-          {/* ── Live preview ───────────────────────────────────── */}
+          {/* ── Live preview with per-row selection ────────────── */}
           <div
-            className="rounded p-3 space-y-2"
+            className="rounded space-y-2"
             style={{
               background: matches.length > 0 ? 'rgba(110,196,158,0.05)' : 'rgba(255,255,255,0.02)',
               border: '1px solid var(--border)',
             }}
           >
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold" style={{ color: matches.length > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                {matches.length}
-              </span>
-              <span style={{ color: 'var(--text-secondary)' }} className="text-sm">
-                {t('batch.matchedSuffix')}
-              </span>
+            {/* Header row: counter + select-all toggle */}
+            <div className="flex items-center justify-between gap-2 p-3 pb-2">
+              <div className="flex items-baseline gap-2">
+                <span
+                  className="text-2xl font-bold"
+                  style={{ color: selectedCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}
+                >
+                  {selectedCount}
+                </span>
+                <span style={{ color: 'var(--text-secondary)' }} className="text-sm">
+                  {t('batch.selectedOf')} {matches.length} {t('batch.matchedSuffix')}
+                </span>
+              </div>
+              {matches.length > 0 && (
+                <button
+                  onClick={toggleAll}
+                  className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded transition-colors hover:opacity-80"
+                  style={{ color: 'var(--text-secondary)', background: 'var(--surface-solid)', border: '1px solid var(--border)' }}
+                  title={allSelected ? t('batch.deselectAll') : t('batch.selectAll')}
+                >
+                  {allSelected ? (
+                    <CheckSquare className="w-3.5 h-3.5" />
+                  ) : noneSelected ? (
+                    <Square className="w-3.5 h-3.5" />
+                  ) : (
+                    // Indeterminate state — partially selected
+                    <Square className="w-3.5 h-3.5" style={{ opacity: 0.5 }} />
+                  )}
+                  {allSelected ? t('batch.deselectAll') : t('batch.selectAll')}
+                </button>
+              )}
             </div>
-            {previewSlice.length > 0 && (
-              <div style={{ color: 'var(--text-muted)' }} className="text-xs space-y-0.5">
-                {previewSlice.map((e, i) => {
+
+            {/* Scrollable list — caps at ~280px height for ergonomics on
+                long match sets. Inline checkboxes for per-row selection. */}
+            {matches.length > 0 && (
+              <div
+                style={{
+                  maxHeight: 280,
+                  overflowY: 'auto',
+                  borderTop: '1px solid var(--border)',
+                  margin: 0,
+                }}
+              >
+                {matches.map((e, i) => {
                   const sh = Array.isArray(e.stakeholder) ? e.stakeholder.join(', ') : e.stakeholder;
+                  const id = e.id || `_idx_${i}`;
+                  const isSelected = e.id ? selectedIds.has(e.id) : false;
                   return (
-                    <div key={e.id || i}>
-                      {formatDateDE(e.date)} · {e._ownerName || '—'} · {sh} → {e.projekt} ({e.taetigkeit})
-                      {' · '}
-                      <span className="font-mono">{formatDurationHM(getEffectiveDurationMs(e))}</span>
-                    </div>
+                    <label
+                      key={id}
+                      className="flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors"
+                      style={{
+                        borderBottom: '1px solid rgba(255,255,255,0.02)',
+                        background: isSelected ? 'transparent' : 'rgba(0,0,0,0.15)',
+                        opacity: isSelected ? 1 : 0.55,
+                        fontSize: '12px',
+                      }}
+                      onMouseEnter={(ev) => {
+                        ev.currentTarget.style.background = isSelected
+                          ? 'rgba(110,196,158,0.04)'
+                          : 'rgba(0,0,0,0.2)';
+                      }}
+                      onMouseLeave={(ev) => {
+                        ev.currentTarget.style.background = isSelected
+                          ? 'transparent'
+                          : 'rgba(0,0,0,0.15)';
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => e.id && toggleOne(e.id)}
+                        aria-label={`${formatDateDE(e.date)} · ${e._ownerName || ''} · ${sh}`}
+                        disabled={!e.id}
+                      />
+                      <span style={{ color: 'var(--text-muted)', minWidth: 86 }}>
+                        {formatDateDE(e.date)}
+                      </span>
+                      <span
+                        className="font-medium"
+                        style={{ color: 'var(--neon-violet, #9B8EC4)', minWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        title={e._ownerName || ''}
+                      >
+                        {e._ownerName || '—'}
+                      </span>
+                      <span style={{ color: 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {sh} <span style={{ color: 'var(--text-muted)', opacity: 0.5 }}>›</span>{' '}
+                        {e.projekt}
+                        {e.taetigkeit && (
+                          <>
+                            {' '}
+                            <span style={{ color: 'var(--text-muted)' }}>({e.taetigkeit})</span>
+                          </>
+                        )}
+                        {e.notiz && (
+                          <>
+                            {' '}
+                            <span style={{ color: 'var(--text-muted)', opacity: 0.7 }} title={e.notiz}>
+                              · {e.notiz.length > 24 ? e.notiz.slice(0, 24) + '…' : e.notiz}
+                            </span>
+                          </>
+                        )}
+                      </span>
+                      <span className="font-mono" style={{ color: 'var(--text-muted)', minWidth: 48, textAlign: 'right' }}>
+                        {formatDurationHM(getEffectiveDurationMs(e))}
+                      </span>
+                    </label>
                   );
                 })}
-                {matches.length > previewSlice.length && (
-                  <div style={{ opacity: 0.6 }}>
-                    … +{matches.length - previewSlice.length} {t('batch.more')}
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -307,7 +433,7 @@ export default function BatchEditPanel() {
             >
               {running ? t('ui.loading') : t('batch.apply')}
             </button>
-            {!hasChanges && matches.length > 0 && (
+            {!hasChanges && selectedCount > 0 && (
               <span style={{ color: 'var(--text-muted)' }} className="text-xs italic">
                 {t('batch.noChanges')}
               </span>
@@ -315,6 +441,11 @@ export default function BatchEditPanel() {
             {matches.length === 0 && (
               <span style={{ color: 'var(--text-muted)' }} className="text-xs italic">
                 {t('batch.noMatches')}
+              </span>
+            )}
+            {matches.length > 0 && selectedCount === 0 && (
+              <span style={{ color: 'var(--text-muted)' }} className="text-xs italic">
+                {t('batch.noneSelected')}
               </span>
             )}
           </div>
@@ -326,7 +457,7 @@ export default function BatchEditPanel() {
             title={t('batch.confirmTitle')}
             message={
               `${t('batch.confirmIntro')}\n\n` +
-              `${matches.length} ${t('batch.matchedSuffix')}\n\n` +
+              `${selectedCount} ${t('batch.matchedSuffix')}\n\n` +
               Object.entries(changes)
                 .map(([k, v]) => `${k}: "${v || t('batch.emptyMark')}"`)
                 .join('\n')
