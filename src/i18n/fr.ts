@@ -243,6 +243,15 @@ export const fr = {
     backToOverview: "Retour à la vue d'équipe",
     viewingMember: "Vous consultez les données de",
     adminEditHint: "En tant qu'administrateur, vous pouvez consulter et modifier les entrées de ce membre.",
+    membersAndRoles: "Membres & rôles",
+    youIndicator: "vous",
+    changeRoleFor: "Changer le rôle de",
+    rolesHint: "Les membres rejoignent via un code d'invitation et sont initialement 'Collaborateur'. En tant qu'administrateur, vous pouvez les promouvoir co-admins.",
+    roleUpdated: "Rôle mis à jour.",
+    role: {
+      admin: "Admin",
+      mitarbeiter: "Collaborateur",
+    },
   },
 
   // KPIs

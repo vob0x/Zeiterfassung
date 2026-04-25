@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Team, TeamMember, TimeEntry, PeriodType } from '@/types';
+import { Team, TeamMember, TimeEntry, PeriodType, ZeRole, ZeRoleName } from '@/types';
 import { getUserData, setUserData, removeUserData } from '@/lib/userStorage';
 import { useAuthStore } from './authStore';
 import { supabaseClient, isSupabaseAvailable, ensureValidSession } from '@/lib/supabase';
@@ -21,6 +21,8 @@ import {
 interface TeamState {
   team: Team | null;
   members: TeamMember[];
+  /** Persistent role rows for the active team (one per member). */
+  roles: ZeRole[];
   memberEntries: Map<string, TimeEntry[]>;
   period: PeriodType;
   connected: boolean;
@@ -33,6 +35,14 @@ interface TeamState {
   syncTeamData: () => Promise<void>;
   setTeamPeriod: (period: PeriodType) => void;
   getTeamMemberEntries: (memberId: string) => TimeEntry[];
+  /**
+   * Look up a user's role in the active team.
+   * Falls back to 'admin' if userId is the team creator (back-compat for
+   * pre-migration teams), otherwise 'mitarbeiter'.
+   */
+  getUserRole: (userId: string) => ZeRoleName;
+  /** Persist a role change (admin only — server-enforced via RLS). */
+  setUserRole: (userId: string, role: ZeRoleName) => Promise<void>;
   setError: (error: string | null) => void;
   clearError: () => void;
 }
@@ -50,6 +60,7 @@ function generateInviteCode(): string {
 export const useTeamStore = create<TeamState>((set, get) => ({
   team: null,
   members: [],
+  roles: [],
   memberEntries: new Map(),
   period: 'week',
   connected: false,
@@ -359,6 +370,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       set({
         team: null,
         members: [],
+        roles: [],
         memberEntries: new Map(),
         connected: false,
         loading: false,
@@ -655,9 +667,27 @@ export const useTeamStore = create<TeamState>((set, get) => ({
           }
         }
 
+        // Pull persistent roles for this team. Falls back to creator-derived
+        // role at the getUserRole() level if the table is empty (legacy team
+        // created before migration 20260427000000_persistent_roles.sql).
+        let roles: ZeRole[] = [];
+        try {
+          const { data: rolesData, error: rolesErr } = await supabaseClient
+            .from('ze_roles')
+            .select('*')
+            .eq('team_id', teamId);
+          if (!rolesErr && rolesData) {
+            roles = rolesData as ZeRole[];
+          }
+        } catch (e) {
+          // Non-fatal — getUserRole has a creator_id fallback
+          console.warn('[Team] Failed to load roles:', e);
+        }
+
         set({
           team,
           members,
+          roles,
           memberEntries: memberEntriesMap,
           connected: true,
           loading: false,
@@ -686,6 +716,85 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   getTeamMemberEntries: (memberId: string): TimeEntry[] => {
     const state = get();
     return state.memberEntries.get(memberId) || [];
+  },
+
+  // ── Persistent role lookups & writes ──────────────────────────────────
+  getUserRole: (userId: string): ZeRoleName => {
+    const { roles, team } = get();
+    const row = roles.find((r) => r.user_id === userId && r.team_id === team?.id);
+    if (row?.role) return row.role;
+    // Back-compat fallback: pre-migration teams have no role rows at all.
+    // The team creator is treated as admin so they can run the role-assign
+    // UI to seed proper rows; everyone else defaults to mitarbeiter.
+    if (team?.creator_id === userId) return 'admin';
+    return 'mitarbeiter';
+  },
+
+  setUserRole: async (userId: string, role: ZeRoleName) => {
+    const { team } = get();
+    if (!team?.id) {
+      throw new Error('Kein aktives Team');
+    }
+    if (!isSupabaseAvailable() || !supabaseClient) {
+      throw new Error('Offline-Modus — Rollen können nur online geändert werden');
+    }
+    const sessionOk = await ensureValidSession();
+    if (!sessionOk) throw new Error('Sitzung abgelaufen');
+
+    // Optimistic local update so the UI feels instant
+    const prevRoles = get().roles;
+    const optimistic: ZeRole = (() => {
+      const existing = prevRoles.find((r) => r.user_id === userId && r.team_id === team.id);
+      if (existing) {
+        return { ...existing, role, updated_at: new Date().toISOString() };
+      }
+      return {
+        id: `optimistic_${Date.now()}`,
+        team_id: team.id,
+        user_id: userId,
+        role,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    })();
+    set({
+      roles: prevRoles.some((r) => r.user_id === userId && r.team_id === team.id)
+        ? prevRoles.map((r) => (r.user_id === userId && r.team_id === team.id ? optimistic : r))
+        : [...prevRoles, optimistic],
+    });
+
+    // Persist via upsert (RLS gates this server-side: only admins succeed)
+    const { error } = await supabaseClient
+      .from('ze_roles')
+      .upsert(
+        { team_id: team.id, user_id: userId, role },
+        { onConflict: 'team_id,user_id' }
+      );
+    if (error) {
+      // Rollback on failure
+      set({ roles: prevRoles });
+      throw new Error(error.message);
+    }
+
+    // Refetch the canonical row to replace the optimistic placeholder
+    try {
+      const { data } = await supabaseClient
+        .from('ze_roles')
+        .select('*')
+        .eq('team_id', team.id)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (data) {
+        const fresh = data as ZeRole;
+        set((s) => ({
+          roles: s.roles.map((r) =>
+            r.user_id === userId && r.team_id === team.id ? fresh : r
+          ),
+        }));
+      }
+    } catch {
+      // Non-fatal — optimistic value is still correct
+    }
   },
 
   setError: (error: string | null) => {

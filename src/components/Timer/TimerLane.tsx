@@ -23,7 +23,6 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
   const {
     pauseTimer,
     resumeTimer,
-    resetSlot,
     removeSlot,
     updateSlotField,
     getSlotElapsed,
@@ -87,7 +86,12 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
         duration_ms: currentElapsed,
         notiz: slot.notiz || '',
       });
-      resetSlot(slot.id);
+      // After Stop+Save the slot is fully done — remove it. Previously we
+      // resetSlot()'d which left an empty paused lane sitting in the
+      // "Pausiert" section, indistinguishable from real paused timers
+      // that still need attention. Removing it keeps the Pausiert list
+      // honest: only timers with elapsed > 0 that were actually paused.
+      removeSlot(slot.id);
     } catch (error) {
       console.error('Failed to save entry:', error);
     }

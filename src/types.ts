@@ -34,6 +34,22 @@ export interface TeamMember {
   joined_at: string;
 }
 
+/**
+ * Persistent role row (analog Dienstplan's dp_roles).
+ * Two-tier model: 'admin' has full access, 'mitarbeiter' is restricted.
+ * Stored in `ze_roles` (migration 20260427000000_persistent_roles.sql).
+ */
+export type ZeRoleName = 'admin' | 'mitarbeiter';
+
+export interface ZeRole {
+  id: string;
+  team_id: string;
+  user_id: string;
+  role: ZeRoleName;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TeamWithMembers extends Team {
   members: TeamMember[];
 }

@@ -243,6 +243,15 @@ export const de = {
     backToOverview: "Zurück zur Team-Übersicht",
     viewingMember: "Du betrachtest die Daten von",
     adminEditHint: "Als Admin kannst du Einträge dieses Mitglieds einsehen und bearbeiten.",
+    membersAndRoles: "Mitglieder & Rollen",
+    youIndicator: "du",
+    changeRoleFor: "Rolle ändern für",
+    rolesHint: "Mitglieder treten via Invite-Code bei und sind initial 'Mitarbeiter'. Als Admin kannst du sie zu Co-Admins befördern.",
+    roleUpdated: "Rolle aktualisiert.",
+    role: {
+      admin: "Admin",
+      mitarbeiter: "Mitarbeiter",
+    },
   },
 
   // KPIs

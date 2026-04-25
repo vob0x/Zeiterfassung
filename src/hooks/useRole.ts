@@ -8,31 +8,34 @@ import { useTeamStore } from '@/stores/teamStore'
  * - `solo`     → user is not in a team. Treated like an admin (no restrictions),
  *                because outside of team context there is no privacy/permission
  *                boundary to enforce.
- * - `admin`    → user is the team creator. Full access to all features:
- *                edit any master data category, view & edit teammates' entries,
- *                see DayRing & goal animations, see per-member breakdowns.
- * - `mitarbeiter` → user joined an existing team. Restricted permissions:
- *                may only add Stakeholder + Projekt (not Format / Tätigkeit),
- *                no per-member breakdown in Team view, no DayRing / goal animations.
+ * - `admin`    → full access (manage members + roles, master data, edit
+ *                teammate entries, see DayRing).
+ * - `mitarbeiter` → restricted: own data only, no Format/Tätigkeit add,
+ *                only team totals in Team view, no DayRing.
  */
 export type UserRole = 'admin' | 'mitarbeiter' | 'solo'
 
 /**
- * Derives the current user's role from auth + team state.
- *
- * Roles are derived rather than persisted (no schema migration needed):
- * the team creator is always admin, joiners are always mitarbeiter.
+ * Reads the current user's role from teamStore.roles, with a creator_id
+ * fallback for legacy teams that pre-date the persistent-roles migration
+ * (20260427000000). Reactive via Zustand selectors.
  */
 export function useRole(): UserRole {
   const profile = useAuthStore((s) => s.profile)
   const team = useTeamStore((s) => s.team)
   const connected = useTeamStore((s) => s.connected)
+  const roles = useTeamStore((s) => s.roles)
 
   return useMemo<UserRole>(() => {
     if (!connected || !team) return 'solo'
     if (!profile?.id) return 'mitarbeiter'
-    return team.creator_id === profile.id ? 'admin' : 'mitarbeiter'
-  }, [connected, team, profile?.id])
+    // 1) Persistent role row wins
+    const row = roles.find((r) => r.user_id === profile.id && r.team_id === team.id)
+    if (row?.role) return row.role as UserRole
+    // 2) Legacy fallback: team creator is admin
+    if (team.creator_id === profile.id) return 'admin'
+    return 'mitarbeiter'
+  }, [connected, team, profile?.id, roles])
 }
 
 /**

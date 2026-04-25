@@ -15,7 +15,8 @@ import { TeamMatrix } from './TeamMatrix';
 import { TeamWorkload } from './TeamWorkload';
 import { TeamTimeline } from './TeamTimeline';
 import { useAuthStore } from '../../stores/authStore';
-import { Copy, Users, UserPlus, UserMinus, Wifi, WifiOff, QrCode, Camera, RefreshCw, ChevronLeft, ChevronRight, RotateCcw, Eye, ArrowLeft, Pencil, Trash2, ShieldCheck } from 'lucide-react';
+import { Copy, Users, UserPlus, UserMinus, Wifi, WifiOff, QrCode, Camera, RefreshCw, ChevronLeft, ChevronRight, RotateCcw, Eye, ArrowLeft, Pencil, Trash2, ShieldCheck, Crown, User as UserIcon } from 'lucide-react';
+import type { ZeRoleName } from '@/types';
 
 // Helper: get ISO week number
 function getISOWeek(date: Date): number {
@@ -34,7 +35,7 @@ import QRScanner from './QRScanner';
 
 export default function TeamView() {
   const { t, language } = useI18n();
-  const { team, members, memberEntries, connected, syncTeamData, leaveTeam, removeMember, createTeam, joinTeam } = useTeamStore();
+  const { team, members, memberEntries, connected, syncTeamData, leaveTeam, removeMember, createTeam, joinTeam, getUserRole, setUserRole } = useTeamStore();
   const profile = useAuthStore((s) => s.profile);
   const isCreator = team?.creator_id === profile?.id;
   const entries = useEntriesStore((state) => state.entries);
@@ -44,6 +45,16 @@ export default function TeamView() {
   // Role gates: Mitarbeiter sees only KPI totals; Admin can drill into a member.
   const isMitarbeiter = useIsMitarbeiter();
   const isAdmin = useIsAdmin();
+
+  /** Persist a role change with optimistic UI + error toast */
+  const handleRoleChange = async (userId: string, role: ZeRoleName) => {
+    try {
+      await setUserRole(userId, role);
+      showToast(t('team.roleUpdated'), 'success');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : t('toast.error'), 'error');
+    }
+  };
 
   const [teamName, setTeamName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -480,16 +491,25 @@ export default function TeamView() {
               >
                 <QrCode className="w-3.5 h-3.5" />
               </button>
-              {/* Member avatars — admin can click to drill into that member's data */}
+              {/* Member avatar chips — compact line summary. Admin can click
+                  the chip to drill into that member; full role management
+                  lives in the dedicated "Mitglieder & Rollen" panel below. */}
               <div className="flex items-center gap-1 ml-auto flex-wrap">
               {members.map((m) => {
                 const isSelf = m.user_id === profile?.id;
                 const displayName = m.display_name || m.user_id;
                 const isClickable = isAdmin && !isSelf;
+                const memberRole = getUserRole(m.user_id);
+                const RoleIcon = memberRole === 'admin' ? Crown : UserIcon;
                 return (
                   <span key={m.id}
                     className="text-xs px-2 py-1 rounded-full font-medium inline-flex items-center gap-1"
-                    style={{ background: 'rgba(155,142,196,0.1)', color: 'var(--neon-violet, #9B8EC4)' }}>
+                    style={{ background: 'rgba(155,142,196,0.1)', color: 'var(--neon-violet, #9B8EC4)' }}
+                    title={t(`team.role.${memberRole}`)}>
+                    <RoleIcon
+                      className="w-3 h-3"
+                      style={{ color: memberRole === 'admin' ? 'var(--neon-cyan)' : 'var(--text-muted)', opacity: 0.85 }}
+                    />
                     {isClickable ? (
                       <button
                         onClick={() => setSelectedMember(displayName)}
@@ -539,6 +559,90 @@ export default function TeamView() {
           </div>
         )}
       </div>
+
+      {/* Mitglieder & Rollen — nur für Admin sichtbar.
+          Listet alle Mitglieder mit Rollen-Badge und einem Select neben jedem
+          Nicht-eigenen Eintrag, mit dem der Admin die Rolle persistent ändern
+          kann. RLS gates writes server-side: only admins can upsert ze_roles. */}
+      {isAdmin && (
+        <div
+          className="rounded-lg p-4 backdrop-blur-sm"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+        >
+          <h3 className="text-sm font-semibold mb-3 uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+            {t('team.membersAndRoles')} ({members.length})
+          </h3>
+          <div className="space-y-2">
+            {[...members]
+              .sort((a, b) => (a.display_name || '').localeCompare(b.display_name || ''))
+              .map((m) => {
+                const isSelf = m.user_id === profile?.id;
+                const displayName = m.display_name || m.user_id;
+                const memberRole = getUserRole(m.user_id);
+                const RoleIcon = memberRole === 'admin' ? Crown : UserIcon;
+                return (
+                  <div
+                    key={m.id}
+                    className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg"
+                    style={{ background: isSelf ? 'rgba(201,169,98,0.06)' : 'var(--surface-solid)' }}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{
+                          background: 'var(--surface-hover)',
+                          color: memberRole === 'admin' ? 'var(--neon-cyan)' : 'var(--text-muted)',
+                        }}
+                      >
+                        <RoleIcon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+                          {displayName}
+                          {isSelf && (
+                            <span className="text-xs ml-2" style={{ color: 'var(--text-muted)' }}>
+                              ({t('team.youIndicator')})
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className="text-[10px] font-mono uppercase tracking-wider"
+                          style={{ color: memberRole === 'admin' ? 'var(--neon-cyan)' : 'var(--text-muted)' }}
+                        >
+                          {t(`team.role.${memberRole}`)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Role select — only for OTHER members. The current admin
+                        can't demote themselves through this UI to avoid the
+                        "I locked myself out" foot-gun; if they really want to
+                        step down, another admin must do it. */}
+                    {!isSelf && (
+                      <select
+                        value={memberRole}
+                        onChange={(e) => handleRoleChange(m.user_id, e.target.value as ZeRoleName)}
+                        className="text-xs px-2 py-1.5 rounded-lg outline-none cursor-pointer"
+                        style={{
+                          background: 'var(--surface-solid)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--text-secondary)',
+                        }}
+                        aria-label={t('team.changeRoleFor') + ' ' + displayName}
+                      >
+                        <option value="admin">{t('team.role.admin')}</option>
+                        <option value="mitarbeiter">{t('team.role.mitarbeiter')}</option>
+                      </select>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+          <p className="text-xs italic mt-3" style={{ color: 'var(--text-muted)' }}>
+            {t('team.rolesHint')}
+          </p>
+        </div>
+      )}
 
       {/* Period Selector */}
       <div className="space-y-3">
