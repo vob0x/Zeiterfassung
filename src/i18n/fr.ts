@@ -180,6 +180,13 @@ export const fr = {
     generated: "Rapport créé.",
     noData: "Aucune entrée dans la période sélectionnée.",
     allTime: "Toute la période",
+    narrativeTitle: "Adapter les textes",
+    narrativeEdited: "personnalisé",
+    narrativeReset: "Rétablir les textes auto",
+    narrativePlaceholder: "Laisser vide pour rendre cette section sans texte.",
+    managementSummary: "Synthèse pour la direction (paragraphe d'introduction)",
+    managementSummaryHint: "Apparaît en premier après l'avis. Généré automatiquement à partir des données — modifiable à votre gré.",
+    narrativeFooterHint: "Les textes sont générés automatiquement à partir des données. Les champs modifiés sont conservés lors du basculement des sections.",
   },
 
   // Batch-Edit (Admin)

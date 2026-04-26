@@ -180,6 +180,13 @@ export const de = {
     generated: "Report erstellt.",
     noData: "Keine Einträge im gewählten Zeitraum.",
     allTime: "Gesamtzeitraum",
+    narrativeTitle: "Texte anpassen",
+    narrativeEdited: "individualisiert",
+    narrativeReset: "Auto-Texte zurücksetzen",
+    narrativePlaceholder: "Leer lassen, um diesen Abschnitt ohne Text zu rendern.",
+    managementSummary: "Management Summary (Cover-Absatz)",
+    managementSummaryHint: "Erscheint prominent als erster Block nach dem Hinweis. Auto-generiert aus den Daten — beliebig anpassbar.",
+    narrativeFooterHint: "Die Texte werden automatisch aus den Daten erzeugt. Bearbeitete Felder bleiben beim Umschalten der Sektionen erhalten.",
   },
 
   // Batch-Edit (Admin)

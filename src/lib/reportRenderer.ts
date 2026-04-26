@@ -105,15 +105,54 @@ export function downloadReport(data: ReportData, format: 'html' | 'word'): void 
 
 function renderBody(d: ReportData): string {
   const blocks: string[] = [renderHeader(d), renderScopeDisclaimer()];
-  if (d.summary) blocks.push(renderSummary(d.summary));
-  if (d.activity) blocks.push(renderActivity(d.activity));
-  if (d.stakeholderProject) blocks.push(renderStakeholderProject(d.stakeholderProject));
-  if (d.driver) blocks.push(renderDriver(d.driver));
-  if (d.comparison) blocks.push(renderComparison(d.comparison));
-  if (d.timeline) blocks.push(renderTimeline(d.timeline, d.includeNotes));
-  if (d.notable) blocks.push(renderNotable(d.notable));
+  // Management Summary as a prominent prose block right after the
+  // disclaimer. Only rendered when the user kept some text.
+  if (d.narratives.managementSummary && d.narratives.managementSummary.trim()) {
+    blocks.push(renderManagementSummary(d.narratives.managementSummary));
+  }
+  if (d.summary) blocks.push(renderSummary(d.summary, d.narratives.bySection.summary));
+  if (d.activity) blocks.push(renderActivity(d.activity, d.narratives.bySection.activity));
+  if (d.stakeholderProject) blocks.push(renderStakeholderProject(d.stakeholderProject, d.narratives.bySection.stakeholderProject));
+  if (d.driver) blocks.push(renderDriver(d.driver, d.narratives.bySection.driver));
+  if (d.comparison) blocks.push(renderComparison(d.comparison, d.narratives.bySection.comparison));
+  if (d.timeline) blocks.push(renderTimeline(d.timeline, d.includeNotes, d.narratives.bySection.timeline));
+  if (d.notable) blocks.push(renderNotable(d.notable, d.narratives.bySection.notable));
   blocks.push(renderFooter(d));
   return blocks.join('\n');
+}
+
+/**
+ * Management Summary box right after the scope disclaimer. Visually
+ * distinct from regular sections — slightly heavier border and a different
+ * accent so the executive reader knows this is the framing paragraph.
+ */
+function renderManagementSummary(text: string): string {
+  return `
+<aside class="r-mgmt-summary">
+  <div class="r-mgmt-tag">Management Summary</div>
+  ${renderProse(text)}
+</aside>`;
+}
+
+/**
+ * Wrap a multi-line user-edited string in <p> tags. Empty lines split
+ * paragraphs. Single newlines are preserved as <br>.
+ */
+function renderProse(text: string): string {
+  if (!text || !text.trim()) return '';
+  const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  return paragraphs
+    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+    .join('\n');
+}
+
+/**
+ * Per-section commentary block. Rendered inside the section, just below
+ * the title. Empty narrative → no block.
+ */
+function renderSectionNarrative(text: string | undefined): string {
+  if (!text || !text.trim()) return '';
+  return `<div class="r-narrative">${renderProse(text)}</div>`;
 }
 
 /**
@@ -152,7 +191,7 @@ function renderHeader(d: ReportData): string {
 </header>`;
 }
 
-function renderSummary(s: ReportSummary): string {
+function renderSummary(s: ReportSummary, narrative?: string): string {
   const cards = [
     { label: 'Gesamtstunden', value: `${s.totalHours.toFixed(1)}h`, hint: 'Wall-Clock' },
     { label: 'Arbeitstage', value: `${s.workdays}`, hint: 'mit Erfassung' },
@@ -171,16 +210,18 @@ function renderSummary(s: ReportSummary): string {
   return `
 <section class="r-section">
   <h2 class="r-section-title">Executive Summary</h2>
+  ${renderSectionNarrative(narrative)}
   <table class="r-kpi-grid"><tr>${cells}</tr></table>
 </section>`;
 }
 
-function renderActivity(a: ActivityBreakdown): string {
+function renderActivity(a: ActivityBreakdown, narrative?: string): string {
   const taetigkeit = renderBarTable('Tätigkeit', a.byTaetigkeit);
   const fmt = renderBarTable('Format', a.byFormat);
   return `
 <section class="r-section">
   <h2 class="r-section-title">Aktivitäts-Verteilung</h2>
+  ${renderSectionNarrative(narrative)}
   ${taetigkeit}
   ${fmt}
 </section>`;
@@ -204,7 +245,7 @@ function renderBarTable(headerLabel: string, rows: { name: string; hours: number
 </table>`;
 }
 
-function renderStakeholderProject(s: StakeholderProjectMatrix): string {
+function renderStakeholderProject(s: StakeholderProjectMatrix, narrative?: string): string {
   const stTab = renderBarTable('Stakeholder', s.stakeholders);
   const prTab = renderBarTable('Projekt', s.projects);
 
@@ -213,6 +254,7 @@ function renderStakeholderProject(s: StakeholderProjectMatrix): string {
   return `
 <section class="r-section">
   <h2 class="r-section-title">Stakeholder &amp; Projekte</h2>
+  ${renderSectionNarrative(narrative)}
   ${stTab}
   ${prTab}
   <h3 class="r-subtitle">Stakeholder × Projekt</h3>
@@ -236,7 +278,7 @@ function renderMatrix(m: StakeholderProjectMatrix): string {
   return `<table class="r-table r-matrix"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
 }
 
-function renderDriver(driver: DriverRow[]): string {
+function renderDriver(driver: DriverRow[], narrative?: string): string {
   if (driver.length === 0) {
     return `
 <section class="r-section">
@@ -255,6 +297,7 @@ function renderDriver(driver: DriverRow[]): string {
   return `
 <section class="r-section">
   <h2 class="r-section-title">Aufwandstreiber</h2>
+  ${renderSectionNarrative(narrative)}
   <p class="r-section-hint">Top-Kombinationen Stakeholder × Projekt nach Stunden, sortiert absteigend.</p>
   <table class="r-table r-driver">
     <thead>
@@ -265,7 +308,7 @@ function renderDriver(driver: DriverRow[]): string {
 </section>`;
 }
 
-function renderComparison(c: PeriodComparison): string {
+function renderComparison(c: PeriodComparison, narrative?: string): string {
   const fmtDelta = (delta: number, pct: number | null, isPercentMetric = false): string => {
     const sign = delta > 0 ? '+' : '';
     const abs = isPercentMetric ? `${sign}${delta.toFixed(1)} pp` : `${sign}${delta.toFixed(1)}`;
@@ -306,6 +349,7 @@ function renderComparison(c: PeriodComparison): string {
   return `
 <section class="r-section">
   <h2 class="r-section-title">Veränderung gegenüber ${escapeHtml(c.prevLabel)}</h2>
+  ${renderSectionNarrative(narrative)}
   <p class="r-section-hint">Vergleichszeitraum: ${escapeHtml(formatDateRange(c.prevStart, c.prevEnd))}</p>
   <table class="r-table r-compare">
     <thead>
@@ -323,7 +367,7 @@ function renderComparison(c: PeriodComparison): string {
 </section>`;
 }
 
-function renderTimeline(t: { days: TimelineDay[]; weeks: TimelineWeek[] }, includeNotes: boolean): string {
+function renderTimeline(t: { days: TimelineDay[]; weeks: TimelineWeek[] }, includeNotes: boolean, narrative?: string): string {
   const dayRows = t.days.map((d) => `
     <tr>
       <td class="r-name">${escapeHtml(d.weekday)} ${escapeHtml(formatShortDate(d.date))}</td>
@@ -343,6 +387,7 @@ function renderTimeline(t: { days: TimelineDay[]; weeks: TimelineWeek[] }, inclu
   return `
 <section class="r-section">
   <h2 class="r-section-title">Zeitverlauf</h2>
+  ${renderSectionNarrative(narrative)}
   <h3 class="r-subtitle">Tagesweise</h3>
   <table class="r-table r-timeline">
     <thead>
@@ -360,11 +405,12 @@ function renderTimeline(t: { days: TimelineDay[]; weeks: TimelineWeek[] }, inclu
 </section>`;
 }
 
-function renderNotable(items: NotableItem[]): string {
+function renderNotable(items: NotableItem[], narrative?: string): string {
   if (items.length === 0) {
     return `
 <section class="r-section">
   <h2 class="r-section-title">Auffälligkeiten</h2>
+  ${renderSectionNarrative(narrative)}
   <p class="r-empty">— keine Auffälligkeiten im Zeitraum —</p>
 </section>`;
   }
@@ -384,6 +430,7 @@ function renderNotable(items: NotableItem[]): string {
   return `
 <section class="r-section">
   <h2 class="r-section-title">Auffälligkeiten</h2>
+  ${renderSectionNarrative(narrative)}
   <table class="r-table r-notable"><tbody>${trs}</tbody></table>
 </section>`;
 }
@@ -453,6 +500,51 @@ body {
   margin-bottom: 18pt;
   page-break-inside: avoid;
 }
+/* Management Summary — prominent prose block right after the disclaimer.
+   Slightly heavier than disclaimer, slate-grey accent so it reads as
+   "framing analysis" rather than "warning". */
+.r-mgmt-summary {
+  background: #f4f6fb;
+  border: 1px solid #d6dceb;
+  border-left: 4px solid #4a5b8a;
+  padding: 12pt 16pt;
+  margin-bottom: 18pt;
+  page-break-inside: avoid;
+}
+.r-mgmt-tag {
+  font-size: 9pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #4a5b8a;
+  margin-bottom: 5pt;
+}
+.r-mgmt-summary p {
+  margin: 0 0 6pt 0;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  color: #2c3346;
+}
+.r-mgmt-summary p:last-child {
+  margin-bottom: 0;
+}
+/* Per-section commentary block sits right after the section title.
+   Visually subtle so it complements the data without overpowering it. */
+.r-narrative {
+  margin-bottom: 10pt;
+  padding: 6pt 10pt;
+  background: #fafaf7;
+  border-left: 3px solid #c9a962;
+  page-break-inside: avoid;
+}
+.r-narrative p {
+  margin: 0 0 4pt 0;
+  font-size: 10pt;
+  line-height: 1.5;
+  color: #3d3a35;
+  font-style: italic;
+}
+.r-narrative p:last-child { margin-bottom: 0; }
 .r-disclaimer-tag {
   font-size: 9pt;
   font-weight: 700;

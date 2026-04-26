@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../i18n';
 import { useEntriesStore } from '../../stores/entriesStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useUiStore } from '../../stores/uiStore';
 import Modal from '../UI/Modal';
-import { FileText, Download } from 'lucide-react';
+import { FileText, Download, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
 import { TimeEntry } from '@/types';
-import { buildReportData, type SectionKey } from '../../lib/reportData';
+import { buildReportData, generateNarratives, type SectionKey, type NarrativeBundle } from '../../lib/reportData';
 import { downloadReport } from '../../lib/reportRenderer';
 
 interface ReportModalProps {
@@ -57,6 +57,16 @@ export default function ReportModal({
   const [includeNotes, setIncludeNotes] = useState(false);
   const [generating, setGenerating] = useState(false);
 
+  // Narrative editor state. Auto-populated from the data each time a
+  // structural input changes (sections / period / notes flag), but the
+  // user can override each field. Empty string means "render this without
+  // prose" — a deliberate user choice we want to honor.
+  const [narratives, setNarratives] = useState<NarrativeBundle>({ managementSummary: '', bySection: {} });
+  const [narrativeOpen, setNarrativeOpen] = useState(false);
+  // Track which fields the user has touched, so re-generation doesn't blow
+  // away their edits when they toggle a section or the notes flag.
+  const [overridden, setOverridden] = useState<Record<string, boolean>>({});
+
   const toggleSection = (key: SectionKey) => {
     setEnabledSections((prev) => {
       const next = new Set(prev);
@@ -80,6 +90,62 @@ export default function ReportModal({
 
   const ownerName = profile?.codename || 'User';
 
+  // Auto-fill narratives whenever the structural inputs change, but PRESERVE
+  // any field the user has manually edited. This way picking "include notes"
+  // won't wipe a paragraph the user already polished. Reset by clicking
+  // "Auto-Texte zurücksetzen" in the panel header.
+  useEffect(() => {
+    if (!isOpen || filteredEntries.length === 0) return;
+    try {
+      const data = buildReportData({
+        entries: filteredEntries,
+        allEntries,
+        periodStart,
+        periodEnd,
+        periodLabel,
+        ownerName,
+        sections: enabledSections,
+        includeNotes,
+      });
+      const fresh = generateNarratives(data);
+      setNarratives((prev) => ({
+        managementSummary: overridden.managementSummary ? prev.managementSummary : fresh.managementSummary,
+        bySection: { ...fresh.bySection, ...Object.fromEntries(
+          Object.entries(prev.bySection).filter(([k]) => overridden[`s:${k}`])
+        ) },
+      }));
+    } catch {
+      // Defensive — auto-narrative generation is best-effort
+    }
+    // overridden intentionally NOT a dep — we read it but don't track
+    // changes (Object.fromEntries snapshot is enough)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, filteredEntries, periodStart, periodEnd, periodLabel, includeNotes, enabledSections]);
+
+  const setManagementSummary = (v: string) => {
+    setNarratives((prev) => ({ ...prev, managementSummary: v }));
+    setOverridden((prev) => ({ ...prev, managementSummary: true }));
+  };
+  const setSectionNarrative = (key: SectionKey, v: string) => {
+    setNarratives((prev) => ({ ...prev, bySection: { ...prev.bySection, [key]: v } }));
+    setOverridden((prev) => ({ ...prev, [`s:${key}`]: true }));
+  };
+  const resetNarratives = () => {
+    if (filteredEntries.length === 0) return;
+    const data = buildReportData({
+      entries: filteredEntries,
+      allEntries,
+      periodStart,
+      periodEnd,
+      periodLabel,
+      ownerName,
+      sections: enabledSections,
+      includeNotes,
+    });
+    setNarratives(generateNarratives(data));
+    setOverridden({});
+  };
+
   async function handleDownload(format: 'html' | 'word') {
     if (filteredEntries.length === 0) {
       showToast(t('report.noData'), 'warning');
@@ -97,6 +163,9 @@ export default function ReportModal({
         sections: enabledSections,
         includeNotes,
       });
+      // Inject user-edited narratives — these override the auto-generated
+      // defaults that buildReportData() seeded.
+      data.narratives = narratives;
       // Yield to React so the spinner state shows before the heavy render.
       await new Promise((r) => setTimeout(r, 0));
       downloadReport(data, format);
@@ -186,6 +255,90 @@ export default function ReportModal({
             <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('report.includeNotesHint')}</div>
           </div>
         </label>
+
+        {/* ── Narratives editor (collapsible, default closed) ─────
+            Each section gets a small textarea pre-filled with the auto-
+            generated prose. The user can edit, clear, or reset to defaults.
+            Clearing a field renders the section without a narrative — a
+            deliberate choice we preserve on re-render. */}
+        <div
+          className="rounded-lg"
+          style={{ border: '1px solid var(--border)', background: 'var(--surface-solid)' }}
+        >
+          <button
+            type="button"
+            onClick={() => setNarrativeOpen((o) => !o)}
+            className="w-full flex items-center justify-between gap-2 px-3 py-2.5"
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text)' }}
+          >
+            <div className="flex items-center gap-2">
+              {narrativeOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              <span className="text-sm font-semibold">{t('report.narrativeTitle')}</span>
+              {Object.values(overridden).some(Boolean) && (
+                <span
+                  className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded"
+                  style={{ background: 'rgba(155,142,196,0.15)', color: 'var(--neon-violet, #9B8EC4)' }}
+                >
+                  {t('report.narrativeEdited')}
+                </span>
+              )}
+            </div>
+            {narrativeOpen && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); resetNarratives(); }}
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors hover:opacity-80"
+                style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+                title={t('report.narrativeReset')}
+              >
+                <RotateCcw className="w-3 h-3" />
+                {t('report.narrativeReset')}
+              </button>
+            )}
+          </button>
+          {narrativeOpen && (
+            <div className="px-3 pb-3 space-y-3" style={{ borderTop: '1px solid var(--border)' }}>
+              <div className="pt-3">
+                <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>
+                  {t('report.managementSummary')}
+                </label>
+                <textarea
+                  value={narratives.managementSummary}
+                  onChange={(e) => setManagementSummary(e.target.value)}
+                  rows={4}
+                  className="w-full px-2 py-1.5 rounded text-sm"
+                  style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', fontFamily: 'var(--font)', resize: 'vertical' }}
+                  placeholder={t('report.narrativePlaceholder')}
+                />
+                <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                  {t('report.managementSummaryHint')}
+                </p>
+              </div>
+
+              {/* Per-section commentaries — one textarea each, only for
+                  sections that are currently enabled. */}
+              {ALL_SECTIONS.filter((s) => enabledSections.has(s.key)).map((section) => (
+                <div key={section.key}>
+                  <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-secondary)' }}>
+                    {section.label}
+                  </label>
+                  <textarea
+                    value={narratives.bySection[section.key] || ''}
+                    onChange={(e) => setSectionNarrative(section.key, e.target.value)}
+                    rows={2}
+                    className="w-full px-2 py-1.5 rounded text-sm"
+                    style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', fontFamily: 'var(--font)', resize: 'vertical' }}
+                    placeholder={t('report.narrativePlaceholder')}
+                  />
+                </div>
+              ))}
+
+              <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>
+                {t('report.narrativeFooterHint')}
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* HTML download — Word is intentionally not exposed in the MVP.
             The renderer already supports a Word path (forWord=true), so
