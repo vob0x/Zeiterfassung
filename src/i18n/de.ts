@@ -164,6 +164,24 @@ export const de = {
     dupHint: "Pro Gruppe wird der erste Eintrag behalten, die restlichen zum Entfernen vorgeschlagen.",
   },
 
+  // Report-Generator (Dashboard)
+  report: {
+    title: "Report erstellen",
+    create: "Report erstellen",
+    cardHint: "Strukturierter Bericht basierend auf aktuellem Zeitraum und Filtern.",
+    scope: "Datengrundlage",
+    days: "Tage",
+    sections: "Sektionen",
+    includeNotes: "Notizen einbeziehen",
+    includeNotesHint: "Notizen aus Einträgen erscheinen im Zeitverlauf.",
+    downloadHtml: "HTML herunterladen",
+    downloadWord: "Word herunterladen",
+    htmlOnlyHint: "HTML lässt sich in Outlook, Word und im Browser öffnen. Word-Export folgt in einer späteren Version.",
+    generated: "Report erstellt.",
+    noData: "Keine Einträge im gewählten Zeitraum.",
+    allTime: "Gesamtzeitraum",
+  },
+
   // Batch-Edit (Admin)
   batch: {
     title: "Batch-Bearbeitung",

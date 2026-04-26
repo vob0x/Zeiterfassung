@@ -9,7 +9,8 @@ import { KpiCards } from './KpiCards';
 import { Heatmap } from './Heatmap';
 import { ActivityBars } from './ActivityBars';
 import { TimelineChart } from './TimelineChart';
-import { Inbox, ChevronLeft, ChevronRight, RotateCcw, ArrowLeft } from 'lucide-react';
+import { Inbox, ChevronLeft, ChevronRight, RotateCcw, ArrowLeft, FileDown } from 'lucide-react';
+import ReportModal from './ReportModal';
 
 // Helper: get ISO week number
 function getISOWeek(date: Date): number {
@@ -85,6 +86,9 @@ export default function DashboardView({
   const [period, setPeriod] = useState<PeriodType>('week');
   // offset: 0 = current period, -1 = previous, +1 = next (capped at 0 for future)
   const [offset, setOffset] = useState(0);
+  // Report modal: only available on the user's own dashboard, not the
+  // admin-scoped member view (the report is a personal management report).
+  const [reportOpen, setReportOpen] = useState(false);
 
   const monthNames = language === 'fr' ? MONTH_NAMES_FR : MONTH_NAMES_DE;
   const dayNames = language === 'fr' ? DAY_NAMES_FR : DAY_NAMES_DE;
@@ -385,11 +389,49 @@ export default function DashboardView({
       {/* KPI Cards */}
       <KpiCards today={kpiToday} period={kpiPeriod} entries={kpiEntries} onDrillDown={() => drillDown({})} />
 
-      {/* Drill-down hint */}
-      {filteredEntries.length > 0 && (
-        <p style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', margin: '-8px 0 0' }}>
-          {t('dash.clickToFilter')}
-        </p>
+      {/* Report button — only on the user's own dashboard, not in admin
+          scoped-member view. Wrapped in its own card to give it visual
+          weight under the heavy KPI card shadows; uses btn-primary so the
+          gold fill stays visible against the new dark mode palette.
+          (Drill-down hint removed — KPI cards rely on cursor:pointer +
+          tooltip, the floating "Klicken zum Filtern…" line was visually
+          glued to the cards by a negative margin and looked like a layout
+          artifact.) */}
+      {!isScoped && (
+        <div
+          className="card p-4 flex flex-col sm:flex-row items-center justify-between gap-3"
+          style={{ borderColor: 'rgba(201,169,98,0.25)' }}
+        >
+          <div className="text-center sm:text-left">
+            <div className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
+              {t('report.create')}
+            </div>
+            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              {t('report.cardHint')}
+            </div>
+          </div>
+          <button
+            onClick={() => setReportOpen(true)}
+            disabled={filteredEntries.length === 0}
+            className="btn btn-primary flex items-center gap-2 flex-shrink-0"
+            style={{ opacity: filteredEntries.length === 0 ? 0.4 : 1 }}
+          >
+            <FileDown className="w-4 h-4" />
+            {t('report.create')}
+          </button>
+        </div>
+      )}
+
+      {/* Report Modal — controlled by the button above */}
+      {!isScoped && (
+        <ReportModal
+          isOpen={reportOpen}
+          onClose={() => setReportOpen(false)}
+          filteredEntries={filteredEntries}
+          periodLabel={periodLabel}
+          periodStart={dateRange?.start || null}
+          periodEnd={dateRange?.end || null}
+        />
       )}
 
       {/* Empty State */}

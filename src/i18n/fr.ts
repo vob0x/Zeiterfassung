@@ -164,6 +164,24 @@ export const fr = {
     dupHint: "Par groupe, la première entrée est conservée, les autres sont proposées à la suppression.",
   },
 
+  // Report-Generator (Dashboard)
+  report: {
+    title: "Créer un rapport",
+    create: "Créer un rapport",
+    cardHint: "Rapport structuré basé sur la période et les filtres actuels.",
+    scope: "Base de données",
+    days: "jours",
+    sections: "Sections",
+    includeNotes: "Inclure les notes",
+    includeNotesHint: "Les notes des entrées apparaîtront dans la chronologie.",
+    downloadHtml: "Télécharger en HTML",
+    downloadWord: "Télécharger en Word",
+    htmlOnlyHint: "Le HTML s'ouvre dans Outlook, Word et le navigateur. L'export Word suivra dans une version ultérieure.",
+    generated: "Rapport créé.",
+    noData: "Aucune entrée dans la période sélectionnée.",
+    allTime: "Toute la période",
+  },
+
   // Batch-Edit (Admin)
   batch: {
     title: "Modification par lots",
