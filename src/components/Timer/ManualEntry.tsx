@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useEntriesStore } from '../../stores/entriesStore';
 import { useMasterStore } from '../../stores/masterStore';
 import { useUiStore } from '../../stores/uiStore';
@@ -6,6 +6,7 @@ import { useI18n } from '../../i18n';
 import { useIsMitarbeiter } from '../../hooks/useRole';
 import { formatDateISO } from '../../lib/utils';
 import { getTodayISO } from '../../lib/utils';
+import { isAbsenceActivity } from '../../lib/absences';
 import NoteInput, { saveNoteToHistory } from '../UI/NoteInput';
 
 interface ManualEntryProps {
@@ -52,10 +53,35 @@ const ManualEntry: React.FC<ManualEntryProps> = ({ embedded = false }) => {
   const [newFormat, setNewFormat] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Absence mode: when the user picks Ferien/Krankheit/Militär/Freistellung
+  // as Tätigkeit, Stakeholder + Projekt aren't required (they don't make
+  // sense for absence) and we pre-fill 08:00–16:24 (8.4h) on first switch.
+  const isAbsenceForm = isAbsenceActivity(formData.taetigkeit);
+
+  // Pre-fill default times when the user switches into an absence activity
+  // and times are still empty. We only auto-fill on the *transition* into
+  // absence mode, not every time `taetigkeit` changes — otherwise editing
+  // a time after picking Ferien would be impossible.
+  const prevAbsenceRef = React.useRef(false);
+  useEffect(() => {
+    if (isAbsenceForm && !prevAbsenceRef.current) {
+      // Just switched INTO absence mode — fill default times if empty
+      setFormData((prev) => ({
+        ...prev,
+        startTime: prev.startTime || '08:00',
+        endTime: prev.endTime || '16:24',
+      }));
+    }
+    prevAbsenceRef.current = isAbsenceForm;
+  }, [isAbsenceForm]);
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
-    if (formData.stakeholders.length === 0) newErrors.stakeholders = t('toast.selectShPr'); // NEW: check array
-    if (!formData.projekt) newErrors.projekt = t('toast.selectShPr');
+    if (!isAbsenceForm) {
+      // Stakeholder + Projekt are only required for actual work entries
+      if (formData.stakeholders.length === 0) newErrors.stakeholders = t('toast.selectShPr');
+      if (!formData.projekt) newErrors.projekt = t('toast.selectShPr');
+    }
     if (!formData.taetigkeit) newErrors.taetigkeit = t('validation.required');
     if (!formData.date) newErrors.date = t('toast.selectDate');
     if (!formData.startTime) newErrors.startTime = t('toast.selectTime');

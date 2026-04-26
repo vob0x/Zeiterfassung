@@ -9,7 +9,8 @@ import { useIsMitarbeiter, useIsAdmin } from '../../hooks/useRole';
 import ConfirmDialog from '../UI/ConfirmDialog';
 import EditEntryModal from '../Entries/EditEntryModal';
 import { PeriodType, TimeEntry } from '@/types';
-import { formatDateISO, formatDateDE, formatDurationHM, getEffectiveDurationMs, computeWallClockMs } from '../../lib/utils';
+import { formatDateISO, formatDateDE, formatDurationHM, getEffectiveDurationMs, computeWorkWallClockMs, computeOvertimeWallClockMs } from '../../lib/utils';
+import { isAbsenceEntry } from '../../lib/absences';
 import { TeamDaily } from './TeamDaily';
 import { TeamMatrix } from './TeamMatrix';
 import { TeamWorkload } from './TeamWorkload';
@@ -267,20 +268,35 @@ export default function TeamView() {
   );
 
   // Compute KPIs from filtered data.
-  // totalHours uses wall-clock PER MEMBER then sums — so each member's
-  // overlapping manual entries don't double-count, but parallel work by
-  // different members still adds up (Alice + Bob both 09–10 = 2h team-time).
+  // totalHours uses wall-clock PER MEMBER excluding absences, then sums.
+  // Per-member union prevents own-overlap double-counting; cross-member
+  // sum is correct (Alice + Bob both 09–10 = 2h team-time). Excluding
+  // absences keeps Ferien/Krankheit out of the productivity numerator.
   const totalHours = useMemo(() => {
     let sum = 0;
     filteredMemberEntries.forEach((entries) => {
-      sum += computeWallClockMs(entries) / (1000 * 60 * 60);
+      sum += computeWorkWallClockMs(entries) / (1000 * 60 * 60);
+    });
+    return sum;
+  }, [filteredMemberEntries]);
+  // Overtime = work on weekends/holidays, also per-member then summed.
+  const overtimeHours = useMemo(() => {
+    let sum = 0;
+    filteredMemberEntries.forEach((entries) => {
+      sum += computeOvertimeWallClockMs(entries) / (1000 * 60 * 60);
     });
     return sum;
   }, [filteredMemberEntries]);
   const personCount = members.length;
-  const entryCount = allTeamEntries.length;
+  // entryCount excludes absence entries from the displayed "Einträge" KPI
+  // since the row labels switched to focus on actual work.
+  const entryCount = allTeamEntries.filter((e) => !isAbsenceEntry(e)).length;
   const avgPerPerson = personCount > 0 ? totalHours / personCount : 0;
-  const workingDays = new Set(allTeamEntries.map((e) => e.date)).size || 1;
+  // workingDays: distinct dates that have at least one non-absence entry,
+  // so a day where only Ferien was booked doesn't pollute the average.
+  const workingDays = new Set(
+    allTeamEntries.filter((e) => !isAbsenceEntry(e)).map((e) => e.date)
+  ).size || 1;
   const avgPerDay = workingDays > 0 ? totalHours / workingDays : 0;
 
   // ========================================================================
@@ -714,8 +730,9 @@ export default function TeamView() {
         )}
       </div>
 
-      {/* KPI Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      {/* KPI Strip — totals exclude absence entries (Ferien/Krankheit/...).
+          Overtime cell only renders when there's something to show. */}
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
           <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{t('team.total')}</div>
           <div className="text-2xl font-bold" style={{ color: 'var(--neon-cyan)' }}>{totalHours.toFixed(1)}h</div>
@@ -735,6 +752,16 @@ export default function TeamView() {
         <div className="rounded-lg p-4 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
           <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{t('team.perDay')}</div>
           <div className="text-2xl font-bold" style={{ color: 'var(--warning)' }}>{avgPerDay.toFixed(1)}h</div>
+        </div>
+        <div
+          className="rounded-lg p-4 backdrop-blur-sm"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)', opacity: overtimeHours > 0 ? 1 : 0.55 }}
+          title={t('dash.overtimeHint')}
+        >
+          <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{t('dash.overtime')}</div>
+          <div className="text-2xl font-bold" style={{ color: overtimeHours > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>
+            {overtimeHours.toFixed(1)}h
+          </div>
         </div>
       </div>
 

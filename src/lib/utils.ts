@@ -2,6 +2,8 @@
  * Utility functions for Zeiterfassung app
  */
 
+import { isAbsenceEntry, isOvertimeDate } from './absences';
+
 /**
  * Format milliseconds to HH:MM:SS or H:MM based on duration
  */
@@ -200,6 +202,35 @@ export function computeUnionMs(entries: Array<{ start_time: string; end_time: st
  */
 export function getTodayISO(): string {
   return formatDateISO(new Date());
+}
+
+/**
+ * Wall-clock total filtered to NON-absence work entries.
+ * Same union-per-day algorithm as computeWallClockMs, but skips entries
+ * whose Tätigkeit is one of ABSENCE_ACTIVITIES (Ferien, Krankheit, …).
+ * This is the right denominator for "actual work hours" KPIs so a 2-week
+ * vacation doesn't drag the average down.
+ */
+export function computeWorkWallClockMs(
+  entries: Array<{ date: string; start_time: string; end_time: string; duration_ms?: number; taetigkeit?: string }>
+): number {
+  const work = entries.filter((e) => !isAbsenceEntry(e));
+  return computeWallClockMs(work);
+}
+
+/**
+ * Wall-clock total of work performed on Saturdays, Sundays, or Swiss
+ * national public holidays — i.e. "Überzeit". Reports this as ADDITIONAL
+ * information; it is also part of the regular wall-clock total. Absence
+ * entries (e.g. a Krankheit on a Saturday) don't count as overtime.
+ */
+export function computeOvertimeWallClockMs(
+  entries: Array<{ date: string; start_time: string; end_time: string; duration_ms?: number; taetigkeit?: string }>
+): number {
+  const overtime = entries.filter(
+    (e) => !isAbsenceEntry(e) && isOvertimeDate(e.date)
+  );
+  return computeWallClockMs(overtime);
 }
 
 /**

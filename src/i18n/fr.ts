@@ -129,6 +129,12 @@ export const fr = {
     clickToFilter: "Cliquer pour filtrer dans la vue Entrées",
     prev: "Période précédente",
     next: "Période suivante",
+    overtime: "Heures suppl.",
+    overtimeHint: "Weekend/jour férié",
+    absenceFerien: "Vacances",
+    absenceKrankheit: "Maladie",
+    absenceOther: "Autres absences",
+    daysSuffix: "jours",
   },
 
   // Manage Section

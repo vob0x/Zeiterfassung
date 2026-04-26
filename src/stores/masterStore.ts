@@ -357,9 +357,11 @@ export async function syncAllMasterData(): Promise<void> {
 export const useMasterStore = create<MasterState>((set, get) => ({
   stakeholders: [],
   projects: [],
-  // Seed with 'Produktiv' so the new-timer default actually resolves to a
-  // selectable option for fresh accounts (UX request after 2-week pilot).
-  activities: ['Produktiv'],
+  // Seed with 'Produktiv' (timer default) plus the four absence categories
+  // so they're available out-of-the-box for booking Ferien/Krankheit/etc.
+  // The absence-aware KPI math (see lib/absences.ts + utils.ts) recognises
+  // them by name and excludes them from work-time totals.
+  activities: ['Produktiv', 'Ferien', 'Krankheit', 'Militär/Zivildienst', 'Bezahlte Freistellung'],
   formats: ['Einzelarbeit', 'Meeting', 'Telefonat', 'Workshop'], // NEW: default formats
   loading: false,
   error: null,
@@ -370,7 +372,7 @@ export const useMasterStore = create<MasterState>((set, get) => ({
       // Always load from localStorage first (source of truth)
       const localStakeholders = getUserData<string[]>('stakeholders', []);
       const localProjects = getUserData<string[]>('projects', []);
-      const localActivities = getUserData<string[]>('activities', ['Produktiv']);
+      const localActivities = getUserData<string[]>('activities', ['Produktiv', 'Ferien', 'Krankheit', 'Militär/Zivildienst', 'Bezahlte Freistellung']);
       const localFormats = getUserData<string[]>('formats', ['Einzelarbeit', 'Meeting', 'Telefonat', 'Workshop']);
 
       // Show local data immediately

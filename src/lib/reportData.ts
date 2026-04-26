@@ -18,7 +18,8 @@
  */
 
 import type { TimeEntry } from '@/types';
-import { computeWallClockMs, computeUnionMs, formatDateISO, getEffectiveDurationMs } from './utils';
+import { computeWallClockMs, computeOvertimeWallClockMs, computeUnionMs, formatDateISO, getEffectiveDurationMs } from './utils';
+import { isAbsenceEntry, countAbsenceDays, type AbsenceDayCounts } from './absences';
 
 const DAILY_GOAL_HOURS = 8.4; // 8h 24min — matches TimerView
 const PRODUCTIVE_ACTIVITY_NAME = 'Produktiv';
@@ -53,8 +54,8 @@ export interface ReportConfig {
 }
 
 export interface ReportSummary {
-  totalHours: number;            // Wall-clock
-  workdays: number;              // Distinct dates with entries
+  totalHours: number;            // Wall-clock, EXCLUDING absence entries
+  workdays: number;              // Distinct dates with non-absence entries
   avgPerWorkday: number;         // totalHours / workdays
   avgVsGoalPct: number;          // avgPerWorkday / DAILY_GOAL_HOURS * 100
   productiveHours: number;       // Wall-clock filtered to "Produktiv" tätigkeit
@@ -62,6 +63,10 @@ export interface ReportSummary {
   stakeholderCount: number;
   projectCount: number;
   entriesCount: number;
+  /** Wall-clock work performed on weekends or Swiss public holidays. */
+  overtimeHours: number;
+  /** Per-category absence-day counts (Ferien / Krankheit / Militär / Freistellung). */
+  absence: AbsenceDayCounts;
 }
 
 export interface ActivityRow {
@@ -233,20 +238,29 @@ export function previousPeriodBounds(
 // ── Section computers ────────────────────────────────────────────────
 
 function computeSummary(entries: TimeEntry[]): ReportSummary {
-  const totalMs = computeWallClockMs(entries);
+  // Absences (Ferien / Krankheit / Militär / Freistellung) are excluded
+  // from work-time totals, workday counts, productivity quote, and the
+  // stakeholder/project tallies — a Ferien-day shouldn't be a "berührter
+  // Stakeholder". They ARE counted under summary.absence for the
+  // separate absence KPIs.
+  const workEntries = entries.filter((e) => !isAbsenceEntry(e));
+  const totalMs = computeWallClockMs(workEntries);
   const totalHours = totalMs / 3_600_000;
-  const dates = new Set(entries.map((e) => e.date));
+  const dates = new Set(workEntries.map((e) => e.date));
   const workdays = dates.size;
   const avgPerWorkday = workdays > 0 ? totalHours / workdays : 0;
   const avgVsGoalPct = DAILY_GOAL_HOURS > 0 ? (avgPerWorkday / DAILY_GOAL_HOURS) * 100 : 0;
 
-  const productiveEntries = entries.filter(isProductive);
+  const productiveEntries = workEntries.filter(isProductive);
   const productiveHours = computeWallClockMs(productiveEntries) / 3_600_000;
   const productivityPct = totalHours > 0 ? (productiveHours / totalHours) * 100 : 0;
 
   const stakeholders = new Set<string>();
-  for (const e of entries) for (const s of shArr(e)) if (s) stakeholders.add(s);
-  const projects = new Set(entries.map((e) => e.projekt).filter(Boolean));
+  for (const e of workEntries) for (const s of shArr(e)) if (s) stakeholders.add(s);
+  const projects = new Set(workEntries.map((e) => e.projekt).filter(Boolean));
+
+  const overtimeHours = computeOvertimeWallClockMs(entries) / 3_600_000;
+  const absence = countAbsenceDays(entries);
 
   return {
     totalHours,
@@ -257,7 +271,9 @@ function computeSummary(entries: TimeEntry[]): ReportSummary {
     productivityPct,
     stakeholderCount: stakeholders.size,
     projectCount: projects.size,
-    entriesCount: entries.length,
+    entriesCount: workEntries.length,
+    overtimeHours,
+    absence,
   };
 }
 
@@ -653,15 +669,22 @@ export function buildReportData(cfg: ReportConfig): ReportData {
     narratives: { managementSummary: '', bySection: {} }, // placeholder, filled below
   };
 
+  // Pre-split entries: most section computers care only about work
+  // entries (Tätigkeit ≠ Ferien/Krankheit/Militär/Freistellung). The
+  // summary still receives ALL entries so it can compute the absence
+  // counts and overtime. The comparison still receives ALL entries to
+  // do its own per-period summary calls (which apply the same filter).
+  const workEntries = cfg.entries.filter((e) => !isAbsenceEntry(e));
+
   if (sections.has('summary')) data.summary = computeSummary(cfg.entries);
-  if (sections.has('activity')) data.activity = computeActivity(cfg.entries);
-  if (sections.has('stakeholderProject')) data.stakeholderProject = computeStakeholderProject(cfg.entries);
-  if (sections.has('timeline')) data.timeline = computeTimeline(cfg.entries, cfg.includeNotes);
-  if (sections.has('driver')) data.driver = computeDriver(cfg.entries);
+  if (sections.has('activity')) data.activity = computeActivity(workEntries);
+  if (sections.has('stakeholderProject')) data.stakeholderProject = computeStakeholderProject(workEntries);
+  if (sections.has('timeline')) data.timeline = computeTimeline(workEntries, cfg.includeNotes);
+  if (sections.has('driver')) data.driver = computeDriver(workEntries);
   if (sections.has('comparison')) {
     data.comparison = computeComparison(cfg.entries, cfg.allEntries, cfg.periodStart, cfg.periodEnd);
   }
-  if (sections.has('notable')) data.notable = computeNotable(cfg.entries);
+  if (sections.has('notable')) data.notable = computeNotable(workEntries);
 
   // Auto-generated narratives. The ReportModal can override these before the
   // renderer runs; passing user text in via cfg would couple the data layer
@@ -717,14 +740,17 @@ function narrativeManagementSummary(d: ReportData): string {
     `Im Berichtszeitraum ${d.periodLabel} wurden insgesamt ${fmtH(s.totalHours)} auf ${fmtN(s.stakeholderCount)} Stakeholder und ${fmtN(s.projectCount)} Projekte gebucht.`
   );
 
-  // Avg-vs-goal commentary
+  // Avg vs. recording-target commentary. Bewusst NICHT "Tagessoll" o.ä.,
+  // weil der Disclaimer oben klarstellt, dass die erfasste Zeit kein
+  // Arbeitszeit-Mass ist. Das 8.4h-Referenz ist ein Erfassungsziel —
+  // Soll-Sprache wäre irreführend.
   if (s.workdays > 0) {
     const goalDelta = s.avgVsGoalPct - 100;
     const direction = Math.abs(goalDelta) < 5
-      ? 'praktisch dem Tagessoll von 8.4h'
+      ? 'praktisch dem Erfassungsziel von 8.4h'
       : goalDelta > 0
-        ? `${fmtPct(goalDelta)} über dem Tagessoll`
-        : `${fmtPct(Math.abs(goalDelta))} unter dem Tagessoll`;
+        ? `${fmtPct(goalDelta)} über dem Erfassungsziel`
+        : `${fmtPct(Math.abs(goalDelta))} unter dem Erfassungsziel`;
     parts.push(
       `Auf ${fmtN(s.workdays)} Erfassungstage verteilt entspricht das ${fmtH(s.avgPerWorkday)}/Tag — ${direction}.`
     );
@@ -761,6 +787,25 @@ function narrativeManagementSummary(d: ReportData): string {
     }
   }
 
+  // Overtime callout if any
+  if (s.overtimeHours > 0) {
+    parts.push(
+      `Davon entfielen ${fmtH(s.overtimeHours)} auf Wochenend- oder Feiertagsarbeit (Überzeit).`
+    );
+  }
+
+  // Absence callout if any
+  if (s.absence.total > 0) {
+    const absParts: string[] = [];
+    if (s.absence.ferien > 0) absParts.push(`${fmtN(s.absence.ferien)} Tag${s.absence.ferien === 1 ? '' : 'e'} Ferien`);
+    if (s.absence.krankheit > 0) absParts.push(`${fmtN(s.absence.krankheit)} Tag${s.absence.krankheit === 1 ? '' : 'e'} Krankheit`);
+    const otherAbs = s.absence.militaer + s.absence.freistellung;
+    if (otherAbs > 0) absParts.push(`${fmtN(otherAbs)} weitere Abwesenheits-Tag${otherAbs === 1 ? '' : 'e'}`);
+    if (absParts.length > 0) {
+      parts.push(`Im Berichtszeitraum fielen zusätzlich ${absParts.join(', ')} an (nicht in den Stunden-Totals enthalten).`);
+    }
+  }
+
   return parts.join(' ');
 }
 
@@ -768,10 +813,10 @@ function narrativeSummary(s: ReportSummary | undefined): string {
   if (!s || s.totalHours === 0) return '';
   const goalDelta = s.avgVsGoalPct - 100;
   const tone = Math.abs(goalDelta) < 5
-    ? 'das Tagessoll wurde im Mittel knapp erreicht'
+    ? 'das Erfassungsziel wurde im Mittel knapp erreicht'
     : goalDelta > 0
-      ? `das Tagessoll wurde im Mittel um ${fmtPct(goalDelta)} überschritten`
-      : `das Tagessoll wurde im Mittel um ${fmtPct(Math.abs(goalDelta))} unterschritten`;
+      ? `das Erfassungsziel wurde im Mittel um ${fmtPct(goalDelta)} überschritten`
+      : `das Erfassungsziel wurde im Mittel um ${fmtPct(Math.abs(goalDelta))} unterschritten`;
   return `An ${fmtN(s.workdays)} Tagen wurden ${fmtN(s.entriesCount)} Einträge erfasst — ${tone}. Die Produktivitätsquote von ${fmtPct(s.productivityPct)} basiert auf ${fmtH(s.productiveHours)} Tätigkeit «Produktiv».`;
 }
 

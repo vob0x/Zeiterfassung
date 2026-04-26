@@ -26,6 +26,16 @@ import type {
   PeriodComparison,
   NotableItem,
 } from './reportData';
+import { isOvertimeDate, overtimeLabel } from './absences';
+
+/**
+ * Returns the overtime label for a date (e.g. "Karfreitag", "Samstag")
+ * or null for normal weekdays. Wraps the absences helper so the renderer
+ * gets a single import surface.
+ */
+function isOvertimeDateLocal(date: string): string | null {
+  return isOvertimeDate(date) ? (overtimeLabel(date) || 'Wochenende') : null;
+}
 
 // ── Public API ────────────────────────────────────────────────────────
 
@@ -192,26 +202,55 @@ function renderHeader(d: ReportData): string {
 }
 
 function renderSummary(s: ReportSummary, narrative?: string): string {
+  const absenceTotal = s.absence.total;
+  const otherAbs = s.absence.militaer + s.absence.freistellung;
   const cards = [
-    { label: 'Gesamtstunden', value: `${s.totalHours.toFixed(1)}h`, hint: 'Wall-Clock' },
-    { label: 'Arbeitstage', value: `${s.workdays}`, hint: 'mit Erfassung' },
-    { label: 'Ø / Arbeitstag', value: `${s.avgPerWorkday.toFixed(1)}h`, hint: `${s.avgVsGoalPct.toFixed(0)}% vom Soll (8.4h)` },
+    { label: 'Gesamtstunden', value: `${s.totalHours.toFixed(1)}h`, hint: 'Wall-Clock, ohne Abwesenheit' },
+    { label: 'Erfassungstage', value: `${s.workdays}`, hint: 'mit Arbeitserfassung' },
+    { label: 'Ø / Erfassungstag', value: `${s.avgPerWorkday.toFixed(1)}h`, hint: `${s.avgVsGoalPct.toFixed(0)}% vom Erfassungsziel (8.4h)` },
     { label: 'Produktivitätsquote', value: `${s.productivityPct.toFixed(0)}%`, hint: `${s.productiveHours.toFixed(1)}h Produktiv` },
     { label: 'Stakeholder', value: `${s.stakeholderCount}`, hint: 'berührt' },
     { label: 'Projekte', value: `${s.projectCount}`, hint: 'berührt' },
   ];
-  const cells = cards.map((c) => `
+  // Auxiliary cards — Überzeit + Abwesenheit. Only render when there's
+  // something meaningful to report; otherwise the report stays compact.
+  const auxCards: typeof cards = [];
+  if (s.overtimeHours > 0) {
+    auxCards.push({
+      label: 'Überzeit',
+      value: `${s.overtimeHours.toFixed(1)}h`,
+      hint: 'Wochenende/Feiertag',
+    });
+  }
+  if (s.absence.ferien > 0) {
+    auxCards.push({ label: 'Ferien', value: `${s.absence.ferien}`, hint: 'Tage' });
+  }
+  if (s.absence.krankheit > 0) {
+    auxCards.push({ label: 'Krankheit', value: `${s.absence.krankheit}`, hint: 'Tage' });
+  }
+  if (otherAbs > 0) {
+    auxCards.push({ label: 'Übrige Abw.', value: `${otherAbs}`, hint: 'Mil./Freistellung (Tage)' });
+  }
+
+  const renderCells = (rows: typeof cards) =>
+    rows.map((c) => `
     <td class="r-kpi">
       <div class="r-kpi-value">${escapeHtml(c.value)}</div>
       <div class="r-kpi-label">${escapeHtml(c.label)}</div>
       <div class="r-kpi-hint">${escapeHtml(c.hint)}</div>
     </td>`).join('');
 
+  const auxRow = auxCards.length > 0
+    ? `<table class="r-kpi-grid r-kpi-aux"><tr>${renderCells(auxCards)}</tr></table>`
+    : '';
+
   return `
 <section class="r-section">
   <h2 class="r-section-title">Executive Summary</h2>
   ${renderSectionNarrative(narrative)}
-  <table class="r-kpi-grid"><tr>${cells}</tr></table>
+  <table class="r-kpi-grid"><tr>${renderCells(cards)}</tr></table>
+  ${auxRow}
+  ${absenceTotal > 0 ? `<p class="r-section-hint">Hinweis: Abwesenheits-Tage (Ferien, Krankheit, Mil./Freistellung) sind aus den Stunden-Totals herausgerechnet.</p>` : ''}
 </section>`;
 }
 
@@ -368,13 +407,24 @@ function renderComparison(c: PeriodComparison, narrative?: string): string {
 }
 
 function renderTimeline(t: { days: TimelineDay[]; weeks: TimelineWeek[] }, includeNotes: boolean, narrative?: string): string {
-  const dayRows = t.days.map((d) => `
-    <tr>
-      <td class="r-name">${escapeHtml(d.weekday)} ${escapeHtml(formatShortDate(d.date))}</td>
+  const dayRows = t.days.map((d) => {
+    // Mark weekend / holiday rows so the reader sees overtime context.
+    // The hours value is wall-clock work — Tätigkeit "Ferien" etc. were
+    // already filtered upstream — so any hours on these rows count as
+    // Überzeit by definition.
+    const overtimeTag = isOvertimeDateLocal(d.date);
+    const rowClass = overtimeTag ? ' r-overtime' : '';
+    const overtimeBadge = overtimeTag
+      ? ` <span class="r-ot-badge" title="${escapeHtml(overtimeTag)}">ÜZ</span>`
+      : '';
+    return `
+    <tr class="${rowClass}">
+      <td class="r-name">${escapeHtml(d.weekday)} ${escapeHtml(formatShortDate(d.date))}${overtimeBadge}</td>
       <td class="r-num">${d.hours.toFixed(1)}h</td>
       <td>${escapeHtml(d.dominantStakeholder || '—')} <span class="r-sep">›</span> ${escapeHtml(d.dominantProject || '—')}</td>
       ${includeNotes ? `<td class="r-notes">${d.notes.length > 0 ? d.notes.map(escapeHtml).join(' · ') : ''}</td>` : ''}
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   const weekRows = t.weeks.map((w) => `
     <tr>
@@ -673,6 +723,17 @@ body {
   color: #9a9491;
   margin-top: 2pt;
 }
+/* Auxiliary KPI row (Überzeit / Abwesenheit) — smaller cards, slightly
+   different background so they read as secondary, not headline metrics. */
+.r-kpi-aux { margin-top: 4pt; }
+.r-kpi-aux .r-kpi {
+  background: #fbfaf6;
+  border: 1px solid #ede4cf;
+  padding: 6pt 8pt;
+}
+.r-kpi-aux .r-kpi-value { font-size: 14pt; }
+.r-kpi-aux .r-kpi-label { font-size: 8.5pt; }
+.r-kpi-aux .r-kpi-hint { font-size: 8pt; }
 
 /* Bar visualisation in tables */
 .r-bar-table th.r-bar-head { width: 28%; }
@@ -701,6 +762,19 @@ body {
   font-weight: 600;
 }
 .r-notes { color: #5f5d58; font-size: 9pt; }
+.r-overtime td { background: rgba(229, 168, 75, 0.06); }
+.r-ot-badge {
+  display: inline-block;
+  margin-left: 4pt;
+  padding: 1pt 4pt;
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: #e5a84b;
+  color: #fff;
+  border-radius: 2pt;
+  vertical-align: 1pt;
+}
 `;
   if (forWord) {
     // Word ignores some CSS and renders a few tags oddly. Keep this

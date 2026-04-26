@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { TimeEntry } from '@/types';
 import { useI18n } from '../../i18n';
 import { computeUnionMs } from '../../lib/utils';
+import { isAbsenceEntry, isOvertimeDate, overtimeLabel } from '../../lib/absences';
 
 interface TeamDailyProps {
   memberEntries: Map<string, TimeEntry[]>;
@@ -43,9 +44,11 @@ export function TeamDaily({ memberEntries, entries }: TeamDailyProps) {
 
       for (const date of uniqueDates) {
         const memberDateEntries = (memberEntries.get(memberId) || []).filter((e) => e.date === date);
-        // Wall-clock per cell: union of intervals on this day for this
-        // member, so overlapping manual entries don't inflate the heat map.
-        const hours = computeUnionMs(memberDateEntries) / (1000 * 60 * 60);
+        // Cell hours exclude absences — Ferien/Krankheit don't count as
+        // worked time. Union avoids double-counting overlapping manual
+        // entries on the same day.
+        const workEntries = memberDateEntries.filter((e) => !isAbsenceEntry(e));
+        const hours = computeUnionMs(workEntries) / (1000 * 60 * 60);
         matrix[memberId][date] = hours;
         // Only count weekdays (Mo–Fr) for the average — weekend work
         // is voluntary/exceptional and shouldn't dilute the daily average.
@@ -128,12 +131,21 @@ export function TeamDaily({ memberEntries, entries }: TeamDailyProps) {
               const dateObj = new Date(date);
               const dayShort = (wdShort.length === 7 ? wdShort : ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'])[dateObj.getDay()];
               const day = dateObj.getDate();
-
+              // Mark weekend/holiday columns so the reader sees at a glance
+              // when overtime applies. Holiday gets the holiday name as
+              // tooltip; weekend just gets the warm gold tint.
+              const isOT = isOvertimeDate(date);
+              const otTooltip = isOT ? overtimeLabel(date) || 'Wochenende' : undefined;
               return (
                 <th
                   key={date}
                   className="p-2 text-center font-semibold border"
-                  style={{ color: 'var(--text-secondary)', background: 'var(--surface-solid)', borderColor: 'var(--border)' }}
+                  style={{
+                    color: isOT ? 'var(--warning)' : 'var(--text-secondary)',
+                    background: isOT ? 'rgba(229,168,75,0.08)' : 'var(--surface-solid)',
+                    borderColor: 'var(--border)',
+                  }}
+                  title={otTooltip}
                 >
                   <div className="text-xs">{dayShort}</div>
                   <div>{day}</div>

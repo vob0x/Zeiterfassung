@@ -4,7 +4,8 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useMasterStore } from '../../stores/masterStore';
 import { useUiStore } from '../../stores/uiStore';
 import { PeriodType, FilterState, TimeEntry } from '@/types';
-import { formatDateISO, formatDateDE, computeWallClockMs } from '../../lib/utils';
+import { formatDateISO, formatDateDE, computeWorkWallClockMs, computeOvertimeWallClockMs } from '../../lib/utils';
+import { countAbsenceDays } from '../../lib/absences';
 import { KpiCards } from './KpiCards';
 import { Heatmap } from './Heatmap';
 import { ActivityBars } from './ActivityBars';
@@ -179,13 +180,25 @@ export default function DashboardView({
   const todayEntries = entries.filter((e) => e.date === todayStr);
 
   // Sum using effective duration (plausibility-checked against Von-Bis)
-  // Wall-clock totals: a 09:00–10:00 + 09:30–10:30 pair counts as 1.5h,
-  // not 2h, by computing per-day unions and summing across days.
-  const kpiToday = computeWallClockMs(todayEntries) / (1000 * 60 * 60);
+  // Wall-clock totals: union per day (overlap counts once) AND excluding
+  // absence entries (Ferien/Krankheit/...) so a 2-week vacation doesn't
+  // drag the average down. The Ø/Erfassungstag in KpiCards is derived
+  // from these — Erfassungstage only count days with at least one
+  // non-absence entry.
+  const kpiToday = computeWorkWallClockMs(todayEntries) / (1000 * 60 * 60);
 
   const kpiPeriod = useMemo(() => {
-    return computeWallClockMs(filteredEntries) / (1000 * 60 * 60);
+    return computeWorkWallClockMs(filteredEntries) / (1000 * 60 * 60);
   }, [filteredEntries]);
+
+  // Overtime = Wall-clock work on Saturdays/Sundays/Swiss public holidays.
+  // Reported separately as ADDITIONAL info; also part of kpiPeriod.
+  const kpiOvertime = useMemo(() => {
+    return computeOvertimeWallClockMs(filteredEntries) / (1000 * 60 * 60);
+  }, [filteredEntries]);
+
+  // Absence day counts per category (Ferien / Krankheit / Militär / Freistellung)
+  const kpiAbsence = useMemo(() => countAbsenceDays(filteredEntries), [filteredEntries]);
 
   const kpiEntries = filteredEntries.length;
 
@@ -386,8 +399,44 @@ export default function DashboardView({
         )}
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — main metrics */}
       <KpiCards today={kpiToday} period={kpiPeriod} entries={kpiEntries} onDrillDown={() => drillDown({})} />
+
+      {/* Auxiliary KPI strip — Überzeit (weekend/holiday work) + Abwesenheit
+          counts. Smaller cards so they don't compete visually with the
+          main three. Only rendered when there's something to show. */}
+      {(kpiOvertime > 0 || kpiAbsence.total > 0) && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="rounded-lg p-3 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)', border: '1px solid' }}>
+            <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{t('dash.overtime')}</div>
+            <div className="text-xl font-bold" style={{ color: kpiOvertime > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>
+              {kpiOvertime.toFixed(1)}h
+            </div>
+            <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t('dash.overtimeHint')}</div>
+          </div>
+          <div className="rounded-lg p-3 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)', border: '1px solid' }}>
+            <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{t('dash.absenceFerien')}</div>
+            <div className="text-xl font-bold" style={{ color: kpiAbsence.ferien > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+              {kpiAbsence.ferien}
+            </div>
+            <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t('dash.daysSuffix')}</div>
+          </div>
+          <div className="rounded-lg p-3 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)', border: '1px solid' }}>
+            <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{t('dash.absenceKrankheit')}</div>
+            <div className="text-xl font-bold" style={{ color: kpiAbsence.krankheit > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+              {kpiAbsence.krankheit}
+            </div>
+            <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t('dash.daysSuffix')}</div>
+          </div>
+          <div className="rounded-lg p-3 backdrop-blur-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)', border: '1px solid' }}>
+            <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{t('dash.absenceOther')}</div>
+            <div className="text-xl font-bold" style={{ color: (kpiAbsence.militaer + kpiAbsence.freistellung) > 0 ? 'var(--neon-violet, #9B8EC4)' : 'var(--text-muted)' }}>
+              {kpiAbsence.militaer + kpiAbsence.freistellung}
+            </div>
+            <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t('dash.daysSuffix')}</div>
+          </div>
+        </div>
+      )}
 
       {/* Report button — only on the user's own dashboard, not in admin
           scoped-member view. Wrapped in its own card to give it visual
