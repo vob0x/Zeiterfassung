@@ -47,8 +47,26 @@ const TimerView: React.FC = () => {
   // double-count toward the daily goal ring.
   const todayTotalMs = useMemo(() => computeWallClockMs(todayEntries), [todayEntries]);
 
-  // Running timers total (live)
-  const runningTotalMs = taskSlots.reduce((sum, slot) => sum + getSlotElapsed(slot.id), 0);
+  // Running timers total (live), Wall-Clock-aware.
+  //
+  // The naive "sum of all elapsed values" double-counts parallel timers —
+  // two AI-tasks tracked simultaneously from 10:00 for one hour each
+  // would add up to 2h but only 1h of presence has passed. We approximate
+  // wall-clock as the MAXIMUM elapsed across active running timers,
+  // which is exact when all running timers started at roughly the same
+  // moment (the typical parallel-task case) and a slight overestimate
+  // only in pathological start-stagger scenarios. Paused timers are
+  // excluded — their accumulated time is already captured in their
+  // pausedMs and will be rolled into Wall-Clock when stopped+saved.
+  const runningTotalMs = useMemo(() => {
+    let max = 0;
+    for (const slot of taskSlots) {
+      if (slot.isPaused) continue;
+      const elapsed = getSlotElapsed(slot.id);
+      if (elapsed > max) max = elapsed;
+    }
+    return max;
+  }, [taskSlots, getSlotElapsed]);
 
   // Daily goal: 8:24
   const dailyGoalMs = 8 * 3600 * 1000 + 24 * 60 * 1000;

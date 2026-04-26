@@ -292,6 +292,13 @@ export const fr = {
     todaySubtitle: "Saisi aujourd'hui",
     periodSubtitle: "Dans la période",
     entriesSubtitle: "Entrées",
+    todayPresence: "Présence aujourd'hui",
+    periodPresence: "Présence sur la période",
+    workFor: "Travail pour",
+    workOn: "Travail sur",
+    timeIn: "Temps en",
+    formatPrefix: "Format :",
+    filteredWork: "Travail filtré",
   },
 
   // Edit

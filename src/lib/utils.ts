@@ -205,6 +205,49 @@ export function getTodayISO(): string {
 }
 
 /**
+ * Active dimension filter — anything that narrows the entry set down to a
+ * specific stakeholder/project/activity/format/notiz. Period boundaries
+ * (from/to) are NOT counted: they pick the time window we look at, but
+ * within that window we still want Präsenzzeit unless a true dimension
+ * filter is on. Used to choose between Wall-Clock and naive-sum semantics
+ * in the KPI cards.
+ */
+export interface KpiFilterContext {
+  stakeholder?: string;
+  project?: string;
+  activity?: string;
+  format?: string;
+  notiz?: string;
+}
+
+export function hasActiveDimensionFilter(f: KpiFilterContext): boolean {
+  return !!(f.stakeholder || f.project || f.activity || f.format || f.notiz);
+}
+
+/**
+ * Context-aware KPI hour calculation.
+ *
+ * - No dimension filter active → Wall-Clock excluding absences
+ *   ("Präsenzzeit" = how long was the user present/working overall)
+ * - With dimension filter → naive sum of entry durations for the filtered
+ *   set ("geleistete Arbeit für X" = how much time was spent on X, with
+ *   each multistakeholder entry counting fully under each dimension)
+ *
+ * Returns hours, not milliseconds, for direct KPI display.
+ */
+export function computeKpiHours(
+  entries: Array<{ date: string; start_time: string; end_time: string; duration_ms?: number; taetigkeit?: string }>,
+  filter: KpiFilterContext
+): number {
+  if (hasActiveDimensionFilter(filter)) {
+    // Naive sum — multistakeholder semantic. Each entry contributes its
+    // own duration regardless of overlap.
+    return entries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0) / 3_600_000;
+  }
+  return computeWorkWallClockMs(entries) / 3_600_000;
+}
+
+/**
  * Wall-clock total filtered to NON-absence work entries.
  * Same union-per-day algorithm as computeWallClockMs, but skips entries
  * whose Tätigkeit is one of ABSENCE_ACTIVITIES (Ferien, Krankheit, …).

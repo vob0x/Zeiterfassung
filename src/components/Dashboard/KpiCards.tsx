@@ -6,6 +6,14 @@ interface KpiCardsProps {
   today: number;   // hours (float)
   period: number;  // hours (float)
   entries: number;  // count
+  /** Optional override for the "Heute" label (e.g. "Präsenzzeit Heute"). */
+  todayLabel?: string;
+  /**
+   * Optional override for the period label. Used by the Dashboard to switch
+   * between "Präsenzzeit Zeitraum" (no filter) and "Arbeit für X"
+   * (filter active).
+   */
+  periodLabel?: string;
   onDrillDown?: () => void;
 }
 
@@ -44,9 +52,11 @@ function AnimatedValue({ value, mode = 'hours' }: { value: number; mode?: 'hours
   return <span>{formatHoursAdaptive(displayValue)}</span>;
 }
 
-export function KpiCards({ today, period, entries, onDrillDown }: KpiCardsProps) {
+export function KpiCards({ today, period, entries, todayLabel, periodLabel, onDrillDown }: KpiCardsProps) {
   const { t } = useI18n();
   const cardCursor = onDrillDown ? 'pointer' : undefined;
+  const todayLbl = todayLabel || t('kpi.today');
+  const periodLbl = periodLabel || t('period.label');
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -58,7 +68,7 @@ export function KpiCards({ today, period, entries, onDrillDown }: KpiCardsProps)
       >
         <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to bottom right, rgba(201,169,98,0.05), rgba(110,196,158,0.05))' }} />
         <div className="relative z-10">
-          <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>{t('kpi.today')}</div>
+          <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>{todayLbl}</div>
           <div className="text-4xl font-bold" style={{ color: 'var(--neon-cyan)' }}>
             <AnimatedValue value={today} mode="hours" />
           </div>
@@ -74,7 +84,7 @@ export function KpiCards({ today, period, entries, onDrillDown }: KpiCardsProps)
       >
         <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to bottom right, rgba(110,196,158,0.05), rgba(91,164,217,0.05))' }} />
         <div className="relative z-10">
-          <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>{t('period.label')}</div>
+          <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>{periodLbl}</div>
           <div className="text-4xl font-bold" style={{ color: '#6EC49E' }}>
             <AnimatedValue value={period} mode="hours" />
           </div>

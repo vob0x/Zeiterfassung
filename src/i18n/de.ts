@@ -292,6 +292,16 @@ export const de = {
     todaySubtitle: "Heute erfasst",
     periodSubtitle: "Im Zeitraum",
     entriesSubtitle: "Einträge",
+    // Context-aware labels for the Dashboard KPI cards. The cards switch
+    // between "Präsenzzeit" (no filter) and "Arbeit für X" (filter active)
+    // so the same headline number stays semantically clear.
+    todayPresence: "Präsenzzeit Heute",
+    periodPresence: "Präsenzzeit Zeitraum",
+    workFor: "Arbeit für",
+    workOn: "Arbeit an",
+    timeIn: "Zeit in",
+    formatPrefix: "Format:",
+    filteredWork: "Gefilterte Arbeit",
   },
 
   // Edit

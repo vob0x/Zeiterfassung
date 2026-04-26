@@ -4,7 +4,7 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useMasterStore } from '../../stores/masterStore';
 import { useUiStore } from '../../stores/uiStore';
 import { PeriodType, FilterState, TimeEntry } from '@/types';
-import { formatDateISO, formatDateDE, computeWorkWallClockMs, computeOvertimeWallClockMs } from '../../lib/utils';
+import { formatDateISO, formatDateDE, computeWorkWallClockMs, computeOvertimeWallClockMs, computeKpiHours, hasActiveDimensionFilter } from '../../lib/utils';
 import { countAbsenceDays } from '../../lib/absences';
 import { KpiCards } from './KpiCards';
 import { Heatmap } from './Heatmap';
@@ -180,16 +180,48 @@ export default function DashboardView({
   const todayEntries = entries.filter((e) => e.date === todayStr);
 
   // Sum using effective duration (plausibility-checked against Von-Bis)
-  // Wall-clock totals: union per day (overlap counts once) AND excluding
-  // absence entries (Ferien/Krankheit/...) so a 2-week vacation doesn't
-  // drag the average down. The Ø/Erfassungstag in KpiCards is derived
-  // from these — Erfassungstage only count days with at least one
-  // non-absence entry.
+  // KPI semantics — context-aware:
+  //   • No dimension filter (Stakeholder/Projekt/Tätigkeit/Format/Notiz):
+  //     Wall-Clock excluding absences = "Präsenzzeit". Overlapping
+  //     manual entries / parallel multistakeholder count once.
+  //   • Dimension filter active: naive sum of filtered entry durations =
+  //     "geleistete Arbeit für …". Multistakeholder entries count fully
+  //     under each axis they touch — so the sum can exceed Präsenz when
+  //     the same hour is shared.
+  // "Heute" is always Präsenzzeit (the today-view ignores dimension filters
+  // by design — todayEntries is a date filter only). "Zeitraum" follows
+  // the user's active filter set.
   const kpiToday = computeWorkWallClockMs(todayEntries) / (1000 * 60 * 60);
 
+  const filterContext = useMemo(() => ({
+    stakeholder: filters.stakeholder,
+    project: filters.project,
+    activity: filters.activity,
+    format: filters.format,
+    notiz: filters.notiz,
+  }), [filters.stakeholder, filters.project, filters.activity, filters.format, filters.notiz]);
+  const isFiltered = hasActiveDimensionFilter(filterContext);
+
   const kpiPeriod = useMemo(() => {
-    return computeWorkWallClockMs(filteredEntries) / (1000 * 60 * 60);
-  }, [filteredEntries]);
+    return computeKpiHours(filteredEntries, filterContext);
+  }, [filteredEntries, filterContext]);
+
+  // Adaptive labels: explicit "Präsenzzeit" when no filter; specific
+  // "Arbeit für X" / "Arbeit an P" / "Zeit in T" when one dimension filter
+  // is active; generic "Gefilterte Arbeit" when multiple filters combined.
+  const todayKpiLabel = t('kpi.todayPresence');
+  const periodKpiLabel = useMemo(() => {
+    if (!isFiltered) return t('kpi.periodPresence');
+    const activeKeys = ([
+      filters.stakeholder ? `${t('kpi.workFor')} ${filters.stakeholder}` : null,
+      filters.project ? `${t('kpi.workOn')} ${filters.project}` : null,
+      filters.activity ? `${t('kpi.timeIn')} ${filters.activity}` : null,
+      filters.format ? `${t('kpi.formatPrefix')} ${filters.format}` : null,
+      filters.notiz ? t('kpi.filteredWork') : null,
+    ].filter(Boolean) as string[]);
+    if (activeKeys.length === 1) return activeKeys[0];
+    return t('kpi.filteredWork');
+  }, [isFiltered, filters.stakeholder, filters.project, filters.activity, filters.format, filters.notiz, t]);
 
   // Overtime = Wall-clock work on Saturdays/Sundays/Swiss public holidays.
   // Reported separately as ADDITIONAL info; also part of kpiPeriod.
@@ -399,8 +431,15 @@ export default function DashboardView({
         )}
       </div>
 
-      {/* KPI Cards — main metrics */}
-      <KpiCards today={kpiToday} period={kpiPeriod} entries={kpiEntries} onDrillDown={() => drillDown({})} />
+      {/* KPI Cards — main metrics with context-aware labels */}
+      <KpiCards
+        today={kpiToday}
+        period={kpiPeriod}
+        entries={kpiEntries}
+        todayLabel={todayKpiLabel}
+        periodLabel={periodKpiLabel}
+        onDrillDown={() => drillDown({})}
+      />
 
       {/* Auxiliary KPI strip — Überzeit (weekend/holiday work) + Abwesenheit
           counts. Smaller cards so they don't compete visually with the
