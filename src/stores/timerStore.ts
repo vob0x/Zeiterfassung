@@ -867,10 +867,13 @@ export function subscribeToTimerSync(): void {
 
   // Realtime is primary for instant updates; polling is safety net only
 
-  // Safety-net polling every 30s (Realtime handles real-time sync)
+  // Safety-net polling — stretched from 30s to 60s after the
+  // 'Disk-IO-Budget at 85%' Supabase warning. Realtime is the primary
+  // cross-device sync channel; polling only catches missed events.
+  // 60s is plenty for that without doubling the IO load.
   _pollInterval = setInterval(() => {
     pullTimersFromSupabase();
-  }, 30_000);
+  }, 60_000);
 
   // Primary: Realtime for instant cross-device updates
   try {

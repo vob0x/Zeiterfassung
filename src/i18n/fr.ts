@@ -168,6 +168,11 @@ export const fr = {
     dupCancel: "Annuler",
     dupSelectOlder: "Marquer les plus anciens",
     dupHint: "Par groupe, la première entrée est conservée, les autres sont proposées à la suppression.",
+    dbCleanup: "Nettoyer la base de données",
+    dbCleanupHint: "Supprime les doublons historiques de votre espace personnel (Mandant, Projet, Activité, Format) hérités d'anciennes synchronisations. Agit uniquement sur vos données — les données d'équipe restent intactes.",
+    dbCleanupBtn: "Nettoyer mes données de base",
+    dbCleanupRemoved: "lignes en double supprimées.",
+    dbCleanupNothing: "Aucun doublon trouvé — tout est propre.",
   },
 
   // Report-Generator (Dashboard)

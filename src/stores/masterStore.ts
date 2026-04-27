@@ -326,6 +326,79 @@ async function deleteMasterByName(
 }
 
 /**
+ * One-shot DB cleanup: per master-data table, fetch the caller's OWN rows
+ * (eq user_id), decrypt each row's name, group by name, keep the first row
+ * per name, delete the rest. Cleans up historical duplicates left over
+ * from the old DELETE+INSERT-merged-list syncListToSupabase behaviour.
+ *
+ * Runs ONLY on rows the caller owns — never touches teammate data
+ * (server-side RLS would block it anyway). Datensicher: only TRUE
+ * duplicates are removed; if the user genuinely has 100 distinct
+ * stakeholders, all 100 are kept.
+ *
+ * Returns per-table counts so the UI can show "deleted N rows" feedback.
+ */
+export interface DbCleanupResult {
+  stakeholders: { kept: number; removed: number };
+  projects: { kept: number; removed: number };
+  activities: { kept: number; removed: number };
+  formats: { kept: number; removed: number };
+}
+
+export async function cleanupOwnNamespaceDuplicates(): Promise<DbCleanupResult> {
+  const empty = { kept: 0, removed: 0 };
+  const result: DbCleanupResult = {
+    stakeholders: { ...empty },
+    projects: { ...empty },
+    activities: { ...empty },
+    formats: { ...empty },
+  };
+  if (!isSupabaseAvailable() || !supabaseClient) return result;
+  const userId = getSupabaseUserId();
+  if (!userId) return result;
+  const sessionOk = await ensureValidSession();
+  if (!sessionOk) return result;
+
+  const tables = ['stakeholders', 'projects', 'activities', 'formats'] as const;
+  for (const table of tables) {
+    const { data, error } = await supabaseClient
+      .from(table)
+      .select('id, name')
+      .eq('user_id', userId);
+    if (error || !data) continue;
+
+    const seen = new Map<string, string>(); // decrypted name → row id (kept)
+    const toDelete: string[] = [];
+    for (const row of data) {
+      const decrypted = await decryptFieldSmart(row.name);
+      if (!decrypted) {
+        // Unrecoverable cipher — drop it; can't tell what it was anyway
+        toDelete.push(row.id);
+        continue;
+      }
+      if (seen.has(decrypted)) {
+        toDelete.push(row.id);
+      } else {
+        seen.set(decrypted, row.id);
+      }
+    }
+    result[table].kept = seen.size;
+    if (toDelete.length === 0) continue;
+
+    // Delete in batches of 100 to keep individual queries small
+    for (let i = 0; i < toDelete.length; i += 100) {
+      const batch = toDelete.slice(i, i + 100);
+      const { error: delErr } = await supabaseClient
+        .from(table)
+        .delete()
+        .in('id', batch);
+      if (!delErr) result[table].removed += batch.length;
+    }
+  }
+  return result;
+}
+
+/**
  * Force-sync ALL master data categories to Supabase with the current encryption key.
  * Call after bulk operations (CSV import, backup restore) to ensure Supabase has
  * a complete, consistently encrypted snapshot — avoids partial writes from
@@ -877,12 +950,22 @@ export function subscribeToMasterSync(): void {
   const state = useMasterStore.getState();
   _lastMasterFingerprint = getMasterFingerprint(state.stakeholders, state.projects, state.activities, state.formats);
 
-  // Poll every 120s as safety net (Realtime is the primary sync mechanism)
+  // Poll every 5min — master data changes infrequently, the previous
+  // 2-min cycle was burning Disk-IO unnecessarily. Realtime channels
+  // were also disabled below (they ran 4 WAL listeners per user even
+  // when nobody was editing master data). Polling alone is enough for
+  // Stakeholder/Projekt/Tätigkeit/Format which barely change once
+  // configured.
   _masterPollInterval = setInterval(() => {
     pullMasterDataFromSupabase();
-  }, 120000);
+  }, 300_000);
 
-  // Realtime subscriptions for each table
+  // Realtime intentionally NOT subscribed for master data — saves four
+  // channels per user × WAL-read pressure. If a teammate adds a new
+  // Stakeholder, it shows up within the 5-min poll cycle, which is
+  // perfectly fine for this domain.
+  // To re-enable later, restore the loop below with the previous logic.
+  /* (legacy realtime block intentionally removed — see comment above)
   const tables = ['stakeholders', 'projects', 'activities', 'formats'];
   for (const table of tables) {
     try {
@@ -906,6 +989,7 @@ export function subscribeToMasterSync(): void {
       // Realtime failed, polling is the fallback
     }
   }
+  */
 }
 
 export function unsubscribeFromMasterSync(): void {

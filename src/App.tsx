@@ -26,28 +26,45 @@ function AppContent() {
     initializeAuth()
   }, [initializeAuth])
 
-  // Load user-scoped data once authenticated AND encryption key is available
-  // (needsPassword=false means key is ready → safe to decrypt Supabase data)
+  // Load user-scoped data once authenticated AND encryption key is available.
   //
   // CRITICAL: syncTeam MUST complete first to restore the Team Key before
   // fetching entries/master data. Otherwise decryptFieldSmart fails because
   // the Team Key isn't in sessionStorage yet, causing all encrypted text
   // fields (stakeholder, projekt, etc.) to decrypt as empty strings.
-  // Full data load: team key → entries + master data + timers
+  //
+  // STAGED BOOT (added after the Disk-IO 85% incident):
+  // The previous flow fired ~7 queries simultaneously on app boot. With a
+  // resource-stressed Supabase instance, that boot burst was enough to
+  // push PostgREST back into 'schema cache failed to load' (503 storm)
+  // immediately after a restart — a self-DoS loop. We now SEQUENCE the
+  // boot steps with small gaps so the DB has breathing room between
+  // bursts. localStorage already serves the UI during this delay, so the
+  // user-perceived load time is unchanged.
   const loadAllData = useCallback(async () => {
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     try {
-      // Step 1: Restore team key first (fast — single row query)
+      // Step 1: Restore team key (fast — single row query). Always first.
       await syncTeam()
       subscribeToTeamSync()
     } catch {
       // Team sync failed (offline?) — continue with personal key
     }
-    // Step 2: Now safe to decrypt — fetch entries & master data
-    fetchEntries().then(() => subscribeToEntriesSync())
-    fetchMaster()
+    await sleep(800);
+
+    // Step 2: Entries — most user-facing data, prioritised before master data.
+    try { await fetchEntries() } catch {}
+    subscribeToEntriesSync()
+    await sleep(800);
+
+    // Step 3: Master data — 4 queries internally; can wait a beat.
+    try { await fetchMaster() } catch {}
     subscribeToMasterSync()
-    // Timers don't contain encrypted text fields, safe to start in parallel
-    restoreTimers().then(() => subscribeToTimerSync())
+    await sleep(800);
+
+    // Step 4: Running timers — non-encrypted, last in line.
+    try { await restoreTimers() } catch {}
+    subscribeToTimerSync()
   }, [syncTeam, fetchEntries, fetchMaster, restoreTimers])
 
   useEffect(() => {

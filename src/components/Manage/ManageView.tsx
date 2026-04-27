@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useI18n } from '../../i18n';
-import { useMasterStore, syncAllMasterData } from '../../stores/masterStore';
+import { useMasterStore, syncAllMasterData, cleanupOwnNamespaceDuplicates } from '../../stores/masterStore';
 import { useEntriesStore } from '../../stores/entriesStore';
 import { useUiStore } from '../../stores/uiStore';
 import { exportBackup, importBackup, exportCSV, importCSV } from '../../lib/backup';
@@ -9,7 +9,7 @@ import { useIsAdmin, useIsMitarbeiter } from '../../hooks/useRole';
 import ConfirmDialog from '../UI/ConfirmDialog';
 import DuplicateReview from './DuplicateReview';
 import BatchEditPanel from './BatchEditPanel';
-import { Pencil, Trash2, Search, Lock } from 'lucide-react';
+import { Pencil, Trash2, Search, Lock, Database } from 'lucide-react';
 
 export default function ManageView() {
   const { t, tArray } = useI18n();
@@ -24,6 +24,7 @@ export default function ManageView() {
   const isReadOnlyType = (type: 'stakeholder' | 'project' | 'activity' | 'format') =>
     isMitarbeiter && (type === 'activity' || type === 'format');
 
+  const [cleanupRunning, setCleanupRunning] = useState(false);
   const [editingType, setEditingType] = useState<'stakeholder' | 'project' | 'activity' | 'format' | null>(null);
   const [editingOriginalName, setEditingOriginalName] = useState('');
   const [editingName, setEditingName] = useState('');
@@ -523,6 +524,51 @@ export default function ManageView() {
           </button>
         </div>
       </div>
+
+      {/* Datenbank bereinigen — admin only.
+          Räumt historische Master-Data-Duplikate auf, die durch das alte
+          DELETE+INSERT-merged-list Sync-Verhalten entstanden sind. Wirkt
+          rein auf den eigenen Namespace (RLS gates teammate rows). */}
+      {isAdmin && (
+        <div
+          className="card p-4 space-y-3"
+          style={{ borderColor: 'rgba(155,142,196,0.3)' }}
+        >
+          <div className="flex items-center gap-2">
+            <Database className="w-4 h-4" style={{ color: 'var(--neon-violet, #9B8EC4)' }} />
+            <h3 style={{ color: 'var(--text)' }} className="text-lg font-semibold">{t('manage.dbCleanup')}</h3>
+          </div>
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs">
+            {t('manage.dbCleanupHint')}
+          </p>
+          <button
+            onClick={async () => {
+              setCleanupRunning(true);
+              try {
+                const r = await cleanupOwnNamespaceDuplicates();
+                const total = r.stakeholders.removed + r.projects.removed + r.activities.removed + r.formats.removed;
+                if (total === 0) {
+                  showToast(t('manage.dbCleanupNothing'), 'success');
+                } else {
+                  showToast(`${total} ${t('manage.dbCleanupRemoved')}`, 'success');
+                  // Trigger a master-data refresh so the UI reflects the cleaned state
+                  await useMasterStore.getState().fetch();
+                }
+              } catch (e) {
+                showToast(e instanceof Error ? e.message : t('toast.error'), 'error');
+              } finally {
+                setCleanupRunning(false);
+              }
+            }}
+            disabled={cleanupRunning}
+            className="btn btn-secondary flex items-center gap-2"
+            style={{ opacity: cleanupRunning ? 0.5 : 1 }}
+          >
+            <Database className="w-4 h-4" />
+            {cleanupRunning ? t('ui.loading') : t('manage.dbCleanupBtn')}
+          </button>
+        </div>
+      )}
 
       {/* Delete All Data — admin only (would wipe Format/Tätigkeit master data otherwise) */}
       {isAdmin && (

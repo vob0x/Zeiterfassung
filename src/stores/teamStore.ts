@@ -911,10 +911,11 @@ export function subscribeToTeamSync(): void {
   unsubscribeFromTeamSync();
 
   const teamId = state.team.id;
-  // Poll every 120s as safety net (Realtime is the primary sync mechanism)
+  // Poll every 5min — team membership / role changes are infrequent.
+  // Stretched from 2min after the Disk-IO-budget pressure on Supabase.
   _teamPollInterval = setInterval(() => {
     pullTeamDataFromSupabase();
-  }, 120000);
+  }, 300_000);
 
   // Realtime: listen for team_members changes
   try {
@@ -938,7 +939,15 @@ export function subscribeToTeamSync(): void {
     // Realtime failed, polling is the fallback
   }
 
-  // Realtime: listen for time_entries changes from all team members
+  // Realtime: per-member time_entries channels were N channels (one per
+  // teammate). Disabled after the Supabase Disk-IO budget pressure —
+  // each channel is a WAL listener that runs even when nobody is editing.
+  // The 5-min team poll above is enough to keep the team view fresh
+  // without continuous WAL pressure. The user's OWN entries are still
+  // covered by the entriesStore Realtime channel for instant feedback
+  // on their own changes.
+  // To re-enable: restore the loop below (kept as commented reference).
+  /*
   const memberUserIds = state.members.map(m => m.user_id);
   for (const uid of memberUserIds) {
     try {
@@ -962,6 +971,7 @@ export function subscribeToTeamSync(): void {
       // silent
     }
   }
+  */
 }
 
 export function unsubscribeFromTeamSync(): void {

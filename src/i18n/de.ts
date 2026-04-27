@@ -168,6 +168,11 @@ export const de = {
     dupCancel: "Abbrechen",
     dupSelectOlder: "Ältere markieren",
     dupHint: "Pro Gruppe wird der erste Eintrag behalten, die restlichen zum Entfernen vorgeschlagen.",
+    dbCleanup: "Datenbank bereinigen",
+    dbCleanupHint: "Entfernt historische Duplikate in deinem Namespace (Stakeholder, Projekt, Tätigkeit, Format), die durch ältere Sync-Versionen entstanden sind. Wirkt nur auf eigene Daten — Team-Daten bleiben unangetastet.",
+    dbCleanupBtn: "Eigene Master-Daten bereinigen",
+    dbCleanupRemoved: "Duplikat-Reihen entfernt.",
+    dbCleanupNothing: "Keine Duplikate gefunden — alles sauber.",
   },
 
   // Report-Generator (Dashboard)
