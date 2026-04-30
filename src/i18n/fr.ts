@@ -358,6 +358,7 @@ export const fr = {
     max8: "Maximum 8 tâches.",
     error: "Erreur :",
     noExport: "Aucune entrée à exporter.",
+    stopSaveFailed: "Échec de l'enregistrement — le chrono est conservé, veuillez réessayer",
   },
 
   // Confirmations

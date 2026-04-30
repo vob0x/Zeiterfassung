@@ -361,6 +361,7 @@ export const de = {
     max8: "Maximal 8 Tasks.",
     error: "Fehler:",
     noExport: "Keine Einträge zum Exportieren.",
+    stopSaveFailed: "Speichern fehlgeschlagen — Timer bleibt erhalten, bitte erneut versuchen",
   },
 
   // Confirmations

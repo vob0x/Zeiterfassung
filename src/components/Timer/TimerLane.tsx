@@ -93,7 +93,13 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
       // honest: only timers with elapsed > 0 that were actually paused.
       removeSlot(slot.id);
     } catch (error) {
+      // Hardened error path (after the Supabase IO crisis data-loss
+      // incident): if addEntry throws (encryption error, localStorage
+      // quota, etc.), KEEP the slot so the user's work isn't silently
+      // lost. Surface a visible toast so they know something went wrong
+      // and can retry.
       console.error('Failed to save entry:', error);
+      showToast(t('toast.stopSaveFailed'), 'error');
     }
   };
 

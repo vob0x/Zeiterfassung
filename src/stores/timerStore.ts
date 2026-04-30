@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { TimerSlot } from '@/types';
 import { useEntriesStore } from './entriesStore';
 import { useAuthStore } from './authStore';
+import { useUiStore } from './uiStore';
 import { getUserData, setUserData, removeUserData } from '@/lib/userStorage';
 import { formatDateISO } from '@/lib/utils';
 import { saveNoteToHistory } from '@/components/UI/NoteInput';
@@ -48,8 +49,8 @@ interface TimerState {
   startTimer: (id: string) => void;
   pauseTimer: (id: string) => void;
   resumeTimer: (id: string) => void;
-  stopTimer: (id: string) => void;
-  stopAllTimers: () => void;
+  stopTimer: (id: string) => Promise<void>;
+  stopAllTimers: () => Promise<void>;
   getSlotElapsed: (id: string) => number;
   tick: () => void;
   saveTimers: () => void;
@@ -361,7 +362,7 @@ export const useTimerStore = create<TimerState>((set, get) => ({
     syncStateToSupabase();
   },
 
-  stopTimer: (id: string) => {
+  stopTimer: async (id: string) => {
     const state = get();
     const slot = state.taskSlots.find((s) => s.id === id);
     if (!slot) return;
@@ -382,12 +383,16 @@ export const useTimerStore = create<TimerState>((set, get) => ({
     const startDate = new Date(now.getTime() - totalMs);
     const startTime = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
 
-    // Save entry to entries store
+    // Save entry to entries store BEFORE removing the slot. The previous
+    // version called entriesStore.add() without awaiting — async failures
+    // (encryption, network) silently disappeared while the slot was
+    // already removed, producing the "stopped timer, no entry created"
+    // data-loss observed during today's Supabase IO crisis.
+    let saved = false;
     try {
       const entriesStore = useEntriesStore.getState();
       const authStore = useAuthStore.getState();
-
-      entriesStore.add({
+      await entriesStore.add({
         date: slot.date || now.toISOString().split('T')[0],
         stakeholder: slot.stakeholder || [],
         projekt: slot.projekt || '',
@@ -401,14 +406,24 @@ export const useTimerStore = create<TimerState>((set, get) => ({
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
+      saved = true;
 
       // Save note to suggestion history
       if (slot.notiz) saveNoteToHistory(slot.notiz);
     } catch (e) {
       console.error('[TimerSync] entriesStore.add failed:', e);
+      // Do NOT remove the slot — the user's work would be lost. Surface
+      // a toast so they know something went wrong; the slot stays and
+      // they can retry stop+save.
+      try {
+        useUiStore.getState().showToast('Speichern fehlgeschlagen — Timer bleibt erhalten, bitte erneut versuchen', 'error');
+      } catch {}
+      return;
     }
 
-    // Remove the stopped slot entirely
+    if (!saved) return;
+
+    // Remove the stopped slot entirely (only after successful save)
     set((st) => ({
       taskSlots: st.taskSlots.filter((s) => s.id !== id),
       activeSlotId: st.activeSlotId === id ? null : st.activeSlotId,
@@ -426,15 +441,23 @@ export const useTimerStore = create<TimerState>((set, get) => ({
     syncStateToSupabase();
   },
 
-  stopAllTimers: () => {
+  stopAllTimers: async () => {
     const state = get();
     const runningSlots = state.taskSlots.filter((s) => !s.isPaused || s.pausedMs > 0);
-    runningSlots.forEach((slot) => {
+    // Sequential await — running stop saves in parallel could trip the
+    // entriesStore's local-state writes over each other and risks data
+    // loss under load. Sequential is slightly slower but bullet-proof.
+    for (const slot of runningSlots) {
       const totalMs = slot.pausedMs + (slot.isPaused ? 0 : Date.now() - slot.startTime.getTime());
       if (totalMs >= 1000) {
-        get().stopTimer(slot.id);
+        try {
+          await get().stopTimer(slot.id);
+        } catch (e) {
+          // stopTimer already toasts on its own failure path; just continue
+          console.error('[stopAllTimers] stop failed for', slot.id, e);
+        }
       }
-    });
+    }
 
     if (state.tickInterval) {
       clearInterval(state.tickInterval);
