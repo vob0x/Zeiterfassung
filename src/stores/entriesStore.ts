@@ -419,6 +419,7 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
                 notiz: decrypted.notiz || '',
                 created_at: decrypted.created_at || '',
                 updated_at: decrypted.updated_at || '',
+                deleted_at: decrypted.deleted_at || null,
               };
             })
           );
@@ -554,8 +555,9 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
             }
           }
 
-          // Supabase responded successfully — it is the source of truth.
-          // Deduplicate by ID (in case Supabase has duplicate rows)
+          // Supabase responded successfully — it is the source of truth
+          // for both active rows AND tombstones (rows with deleted_at set).
+          // Deduplicate by ID first (in case Supabase has duplicate rows)
           const sbByIdMap = new Map<string, TimeEntry>();
           for (const entry of sbEntries) {
             const existing = sbByIdMap.get(entry.id);
@@ -563,23 +565,40 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
               sbByIdMap.set(entry.id, entry);
             }
           }
-          const dedupedSbEntries = Array.from(sbByIdMap.values());
+          const allSbEntries = Array.from(sbByIdMap.values());
 
-          // Only keep local entries that are PENDING push (just created locally,
-          // not yet confirmed in Supabase). This prevents stale localStorage
-          // entries from being re-pushed after Supabase data was intentionally cleared.
-          const sbIds = new Set(dedupedSbEntries.map((e) => e.id));
-          const now = Date.now();
-          const RECENT_THRESHOLD_MS = 30000; // 30 seconds
+          // Split tombstones from active. Tombstones tell us about
+          // deletions that other devices have committed; we drop matching
+          // local rows so the deletion propagates here.
+          const sbActive = allSbEntries.filter((e) => !e.deleted_at);
+          const sbTombstoneIds = new Set(
+            allSbEntries.filter((e) => !!e.deleted_at).map((e) => e.id)
+          );
+
+          // Local entries that are tombstoned in Supabase: drop them.
+          // Local entries pending push (they have a corresponding local
+          // tombstone we haven't synced yet): also drop from the active set.
+          const sbActiveIds = new Set(sbActive.map((e) => e.id));
           const localOnly = localEntries.filter((e) => {
-            if (sbIds.has(e.id)) return false; // Already in Supabase
-            // Keep if explicitly tracked as pending push (just created this session)
-            if (_pendingLocalIds.has(e.id)) return true;
-            // Fallback: keep if created very recently (safety net for race conditions)
-            const createdAt = e.created_at ? new Date(e.created_at).getTime() : 0;
-            return (now - createdAt) < RECENT_THRESHOLD_MS;
+            if (sbActiveIds.has(e.id)) return false;       // server has active version
+            if (sbTombstoneIds.has(e.id)) return false;    // server says deleted
+            if (hasLocalTombstone(e.id)) return false;     // we deleted offline, awaiting push
+            return true;                                    // genuinely local-only — preserve
           });
-          const merged = [...dedupedSbEntries, ...localOnly];
+          // ALSO filter sbActive by local tombstones — covers the
+          // "user deleted offline, push hasn't gone through, server
+          // still shows entry as active" race. Without this, the entry
+          // would re-appear from sbActive on every pull until the
+          // tombstone push finally succeeds.
+          const sbActiveFiltered = sbActive.filter((e) => !hasLocalTombstone(e.id));
+          const merged = [...sbActiveFiltered, ...localOnly];
+
+          // Tombstones we tracked locally but Supabase already
+          // confirmed: clear them from the local set (the deletion was
+          // already applied server-side).
+          for (const id of sbTombstoneIds) {
+            if (hasLocalTombstone(id)) removeLocalTombstone(id);
+          }
 
           set({ entries: merged });
           setUserData('entries', merged);
@@ -987,7 +1006,12 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
       set({ entries: updated });
       setUserData('entries', updated);
 
-      // Sync delete to Supabase
+      // Soft-delete on Supabase: set deleted_at instead of removing the
+      // row. Other devices learn about the deletion via the next pull
+      // (which now includes deleted_at rows and filters them out
+      // client-side). This pairs with the soft-merge behaviour to give
+      // us both data preservation AND cross-device delete propagation.
+      const deletedAt = new Date().toISOString();
       if (isSupabaseAvailable() && supabaseClient) {
         const profile = useAuthStore.getState().profile;
         if (profile?.id && !profile.id.startsWith('local_')) {
@@ -995,13 +1019,21 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
           if (sessionOk) {
             const { error: sbErr } = await supabaseClient
               .from('time_entries')
-              .delete()
+              .update({ deleted_at: deletedAt })
               .eq('id', id);
             if (sbErr) {
-              console.error('[Sync] Entry delete failed:', sbErr.message, sbErr.details);
+              console.error('[Sync] Entry tombstone failed:', sbErr.message, sbErr.details);
+              // Track locally so a future sync can retry the tombstone
+              addLocalTombstone(id, deletedAt);
             }
+          } else {
+            addLocalTombstone(id, deletedAt);
           }
         }
+      } else {
+        // Offline — track tombstone locally; the delete will propagate
+        // when we next come online.
+        addLocalTombstone(id, deletedAt);
       }
       // Also remove from pending set if it was there
       if (_pendingLocalIds.has(id)) {
@@ -1307,6 +1339,48 @@ export function markEntryPending(id: string): void {
   _savePendingIds(_pendingLocalIds);
 }
 
+// ── Local tombstones ─────────────────────────────────────────────────
+//
+// When the user deletes an entry while offline (or when the Supabase
+// UPDATE fails), we track the deletion locally so a later sync can push
+// the tombstone (deleted_at) to Supabase. This prevents the
+// "delete-then-zombie" pattern: without this, a local-only delete would
+// be undone on the next pull because Supabase would still show the
+// active entry.
+//
+// Persisted to localStorage so it survives reload / PWA restart.
+const TOMBSTONES_KEY = 'ze_local_tombstones';
+
+function _loadTombstones(): Map<string, string> {
+  try {
+    const stored = localStorage.getItem(TOMBSTONES_KEY);
+    if (stored) return new Map(JSON.parse(stored));
+  } catch { /* ignore */ }
+  return new Map();
+}
+
+function _saveTombstones(t: Map<string, string>): void {
+  try {
+    if (t.size === 0) localStorage.removeItem(TOMBSTONES_KEY);
+    else localStorage.setItem(TOMBSTONES_KEY, JSON.stringify(Array.from(t.entries())));
+  } catch { /* ignore */ }
+}
+
+const _localTombstones = _loadTombstones();
+
+export function addLocalTombstone(id: string, deletedAt: string): void {
+  _localTombstones.set(id, deletedAt);
+  _saveTombstones(_localTombstones);
+}
+
+export function removeLocalTombstone(id: string): void {
+  if (_localTombstones.delete(id)) _saveTombstones(_localTombstones);
+}
+
+export function hasLocalTombstone(id: string): boolean {
+  return _localTombstones.has(id);
+}
+
 export async function pullEntriesFromSupabase(): Promise<void> {
   if (Date.now() < _entriesSuppressUntil) return;
 
@@ -1377,12 +1451,12 @@ export async function pullEntriesFromSupabase(): Promise<void> {
           notiz: decrypted.notiz || '',
           created_at: decrypted.created_at || '',
           updated_at: decrypted.updated_at || '',
+          deleted_at: decrypted.deleted_at || null,
         };
       })
     );
 
-    // Deduplicate by ID: if Supabase has multiple rows with same ID (schema issue),
-    // keep only the newest version (by updated_at)
+    // Deduplicate by ID: if Supabase has multiple rows with same ID
     const sbByIdMap = new Map<string, TimeEntry>();
     for (const entry of sbEntries) {
       const existing = sbByIdMap.get(entry.id);
@@ -1390,44 +1464,157 @@ export async function pullEntriesFromSupabase(): Promise<void> {
         sbByIdMap.set(entry.id, entry);
       }
     }
-    const dedupedSbEntries = Array.from(sbByIdMap.values());
+    const allSbEntries = Array.from(sbByIdMap.values());
+
+    // Split tombstones from active rows
+    const sbActive = allSbEntries.filter((e) => !e.deleted_at);
+    const sbTombstoneIds = new Set(allSbEntries.filter((e) => !!e.deleted_at).map((e) => e.id));
+    const sbActiveIds = new Set(sbActive.map((e) => e.id));
 
     // Clear pending IDs that now appear in Supabase (confirmed synced)
-    const sbIds = new Set(dedupedSbEntries.map(e => e.id));
     let pendingChanged = false;
     for (const id of Array.from(_pendingLocalIds)) {
-      if (sbIds.has(id)) { _pendingLocalIds.delete(id); pendingChanged = true; }
+      if (sbActiveIds.has(id) || sbTombstoneIds.has(id)) {
+        _pendingLocalIds.delete(id);
+        pendingChanged = true;
+      }
     }
     if (pendingChanged) _savePendingIds(_pendingLocalIds);
 
-    // Merge strategy:
-    // 1. Supabase entries are the base (source of truth for synced data)
-    // 2. Keep local-only entries if they are PENDING push (tracked explicitly)
-    //    OR if they were created very recently (< 30s, fallback safety net)
-    // This prevents zombie entries (deleted on another device) while also
-    // preventing data loss for entries that haven't been pushed yet.
-    const now = Date.now();
-    const RECENT_THRESHOLD_MS = 30000; // 30 seconds
-    const localOnly = localEntries.filter(e => {
-      if (sbIds.has(e.id)) return false; // Already in Supabase
-      // Keep if explicitly tracked as pending push
-      if (_pendingLocalIds.has(e.id)) return true;
-      // Fallback: keep if created very recently (not yet tracked or race condition)
-      const createdAt = e.created_at ? new Date(e.created_at).getTime() : 0;
-      return (now - createdAt) < RECENT_THRESHOLD_MS;
-    });
+    // Clear local tombstones that Supabase confirmed
+    for (const id of sbTombstoneIds) {
+      if (hasLocalTombstone(id)) removeLocalTombstone(id);
+    }
 
-    // For local-only entries that survived, attempt to push them to Supabase
+    // Merge: keep all local entries that are NOT tombstoned anywhere.
+    // This combines soft-merge (data preservation) with proper delete
+    // propagation via tombstones.
+    const localOnly = localEntries.filter((e) => {
+      if (sbActiveIds.has(e.id)) return false;     // server has active version
+      if (sbTombstoneIds.has(e.id)) return false;  // server says deleted
+      if (hasLocalTombstone(e.id)) return false;   // we deleted offline
+      return true;                                  // genuinely local-only
+    });
+    // Also filter sbActive by local tombstones — covers the offline-
+    // delete-then-pull race where Supabase still shows the entry as
+    // active because the tombstone push hasn't completed yet.
+    const sbActiveFiltered = sbActive.filter((e) => !hasLocalTombstone(e.id));
+
+    // For local-only entries, attempt to push them to Supabase
     if (localOnly.length > 0 && hasEncryptionKey()) {
       pushLocalEntriesToSupabase(localOnly, profile.id);
     }
 
-    const merged = [...dedupedSbEntries, ...localOnly];
+    // Push any unsynced local tombstones (offline deletes) so other
+    // devices learn about them on their next pull.
+    pushLocalTombstonesToSupabase(profile.id);
+
+    const merged = [...sbActiveFiltered, ...localOnly];
 
     useEntriesStore.setState({ entries: merged });
     setUserData('entries', merged);
   } catch (e) {
     // silent
+  }
+}
+
+/**
+ * Force-resync ALL local entries to Supabase, regardless of pending state.
+ *
+ * Recovery tool for the case where local entries failed to upsert (Supabase
+ * outage, IO throttling, dropped pending tracking) and aren't visible on
+ * other devices. Marks every local entry as pending and triggers a hard
+ * push. Returns how many entries it tried to push and how many succeeded.
+ */
+export async function forceResyncAllLocalEntries(): Promise<{ attempted: number; succeeded: number; error?: string }> {
+  const profile = useAuthStore.getState().profile;
+  if (!isSupabaseAvailable() || !supabaseClient) {
+    return { attempted: 0, succeeded: 0, error: 'Supabase nicht verfügbar' };
+  }
+  if (!profile?.id || profile.id.startsWith('local_')) {
+    return { attempted: 0, succeeded: 0, error: 'Kein Online-Account' };
+  }
+  if (!hasEncryptionKey()) {
+    return { attempted: 0, succeeded: 0, error: 'Verschlüsselungsschlüssel nicht verfügbar' };
+  }
+  const sessionOk = await ensureValidSession();
+  if (!sessionOk) {
+    return { attempted: 0, succeeded: 0, error: 'Sitzung abgelaufen' };
+  }
+
+  const allEntries = useEntriesStore.getState().entries;
+  if (allEntries.length === 0) return { attempted: 0, succeeded: 0 };
+
+  // Mark every entry as pending so the next regular pull also preserves them
+  for (const e of allEntries) _pendingLocalIds.add(e.id);
+  _savePendingIds(_pendingLocalIds);
+
+  // Encrypt all rows in parallel
+  const rows = await Promise.all(
+    allEntries.map(async (e) => {
+      const row = {
+        id: e.id,
+        user_id: profile.id,
+        date: e.date,
+        stakeholder: e.stakeholder,
+        projekt: e.projekt,
+        taetigkeit: e.taetigkeit,
+        format: e.format || 'Einzelarbeit',
+        start_time: e.start_time,
+        end_time: e.end_time,
+        duration_ms: e.duration_ms,
+        notiz: e.notiz || '',
+        created_at: e.created_at,
+        updated_at: e.updated_at,
+      };
+      return encryptEntryForSupabase(row);
+    })
+  );
+
+  // Upsert in batches of 50 to keep individual queries small
+  let succeeded = 0;
+  for (let i = 0; i < rows.length; i += 50) {
+    const batch = rows.slice(i, i + 50);
+    const { error } = await supabaseClient
+      .from('time_entries')
+      .upsert(batch, { onConflict: 'id' });
+    if (!error) {
+      succeeded += batch.length;
+      // Clear pending for the successfully pushed batch
+      const idsInBatch = batch.map((r: any) => r.id);
+      for (const id of idsInBatch) _pendingLocalIds.delete(id);
+    } else {
+      console.error('[ForceResync] batch failed:', error.message);
+    }
+  }
+  _savePendingIds(_pendingLocalIds);
+  return { attempted: rows.length, succeeded };
+}
+
+/**
+ * Push pending local tombstones to Supabase (retry mechanism for offline
+ * deletes). Sets deleted_at on each tombstoned row. Non-blocking.
+ */
+async function pushLocalTombstonesToSupabase(_userId: string): Promise<void> {
+  if (!supabaseClient) return;
+  if (_localTombstones.size === 0) return;
+  try {
+    const ids = Array.from(_localTombstones.keys());
+    for (let i = 0; i < ids.length; i += 50) {
+      const batchIds = ids.slice(i, i + 50);
+      // Use the most recent deleted_at among the batch — they're all
+      // user-deletes, the exact timestamp matters less than "is deleted".
+      const deletedAt = _localTombstones.get(batchIds[0]) || new Date().toISOString();
+      const { error } = await supabaseClient
+        .from('time_entries')
+        .update({ deleted_at: deletedAt })
+        .in('id', batchIds);
+      if (!error) {
+        for (const id of batchIds) removeLocalTombstone(id);
+      }
+    }
+  } catch {
+    // Silent — will retry on next pull cycle
   }
 }
 

@@ -173,6 +173,11 @@ export const fr = {
     dbCleanupBtn: "Nettoyer mes données de base",
     dbCleanupRemoved: "lignes en double supprimées.",
     dbCleanupNothing: "Aucun doublon trouvé — tout est propre.",
+    forceResync: "Pousser les entrées vers Supabase",
+    forceResyncHint: "Force le téléversement de toutes les entrées stockées localement vers Supabase. À utiliser lorsque vos données sont visibles sur un appareil mais pas sur un autre — typique après une panne de Supabase. Les entrées existantes côté serveur sont mises à jour via upsert, pas dupliquées.",
+    forceResyncBtn: "Synchroniser les entrées maintenant",
+    forceResyncDone: "entrées téléversées avec succès.",
+    forceResyncNoEntries: "Aucune entrée locale à téléverser.",
   },
 
   // Report-Generator (Dashboard)

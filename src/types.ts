@@ -103,6 +103,14 @@ export interface TimeEntry {
   notiz?: string | null;
   created_at: string;
   updated_at: string;
+  /**
+   * Soft-delete tombstone. NULL/undefined = active entry.
+   * Set by delete() to propagate deletions across devices: instead of
+   * removing the row, we mark it as deleted so other devices can learn
+   * about the deletion on their next pull. The client filters
+   * non-null deleted_at out of the displayed entries[].
+   */
+  deleted_at?: string | null;
 }
 
 export interface TimeEntryInput {

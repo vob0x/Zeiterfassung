@@ -616,10 +616,13 @@ export const useTeamStore = create<TeamState>((set, get) => ({
             .order('date', { ascending: false });
 
           if (entriesData) {
+            // Drop tombstones at the source — the team view never wants
+            // to display deleted entries.
+            const activeRows = entriesData.filter((r: any) => !r.deleted_at);
             // Use shared decryptEntryFromSupabase for consistent decryption
             // (same defaults, stakeholder migration, format fallback as entriesStore)
             const entries: TimeEntry[] = await Promise.all(
-              entriesData.map(async (row: any) => {
+              activeRows.map(async (row: any) => {
                 const decrypted = await decryptEntryFromSupabase(row);
                 let stakeholder: string | string[] = decrypted.stakeholder || '';
                 if (typeof stakeholder === 'string' && stakeholder) {

@@ -173,6 +173,11 @@ export const de = {
     dbCleanupBtn: "Eigene Master-Daten bereinigen",
     dbCleanupRemoved: "Duplikat-Reihen entfernt.",
     dbCleanupNothing: "Keine Duplikate gefunden — alles sauber.",
+    forceResync: "Einträge zu Supabase pushen",
+    forceResyncHint: "Erzwingt das Hochladen aller lokal gespeicherten Einträge zu Supabase. Nutze das wenn deine Daten auf einem Gerät sichtbar sind, auf einem anderen aber nicht — typisch nach einer Supabase-Störung. Bestehende Server-Einträge werden via Upsert aktualisiert, nicht doppelt angelegt.",
+    forceResyncBtn: "Einträge jetzt synchronisieren",
+    forceResyncDone: "Einträge erfolgreich hochgeladen.",
+    forceResyncNoEntries: "Keine lokalen Einträge zum Hochladen.",
   },
 
   // Report-Generator (Dashboard)

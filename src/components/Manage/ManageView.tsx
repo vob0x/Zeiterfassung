@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useI18n } from '../../i18n';
 import { useMasterStore, syncAllMasterData, cleanupOwnNamespaceDuplicates } from '../../stores/masterStore';
-import { useEntriesStore } from '../../stores/entriesStore';
+import { useEntriesStore, forceResyncAllLocalEntries } from '../../stores/entriesStore';
 import { useUiStore } from '../../stores/uiStore';
 import { exportBackup, importBackup, exportCSV, importCSV } from '../../lib/backup';
 import { clearAllUserData } from '../../lib/userStorage';
@@ -9,7 +9,7 @@ import { useIsAdmin, useIsMitarbeiter } from '../../hooks/useRole';
 import ConfirmDialog from '../UI/ConfirmDialog';
 import DuplicateReview from './DuplicateReview';
 import BatchEditPanel from './BatchEditPanel';
-import { Pencil, Trash2, Search, Lock, Database } from 'lucide-react';
+import { Pencil, Trash2, Search, Lock, Database, UploadCloud } from 'lucide-react';
 
 export default function ManageView() {
   const { t, tArray } = useI18n();
@@ -25,6 +25,7 @@ export default function ManageView() {
     isMitarbeiter && (type === 'activity' || type === 'format');
 
   const [cleanupRunning, setCleanupRunning] = useState(false);
+  const [resyncRunning, setResyncRunning] = useState(false);
   const [editingType, setEditingType] = useState<'stakeholder' | 'project' | 'activity' | 'format' | null>(null);
   const [editingOriginalName, setEditingOriginalName] = useState('');
   const [editingName, setEditingName] = useState('');
@@ -569,6 +570,48 @@ export default function ManageView() {
           </button>
         </div>
       )}
+
+      {/* Force-Resync — Datenrettung für Einträge die lokal sind aber nicht
+          in Supabase. Markiert ALLE Einträge als pending und pusht sie
+          zwangsweise. Verfügbar für alle (nicht nur admin) — User-Daten
+          gehören dem User. */}
+      <div
+        className="card p-4 space-y-3"
+        style={{ borderColor: 'rgba(110,196,158,0.3)' }}
+      >
+        <div className="flex items-center gap-2">
+          <UploadCloud className="w-4 h-4" style={{ color: 'var(--success)' }} />
+          <h3 style={{ color: 'var(--text)' }} className="text-lg font-semibold">{t('manage.forceResync')}</h3>
+        </div>
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs">
+          {t('manage.forceResyncHint')}
+        </p>
+        <button
+          onClick={async () => {
+            setResyncRunning(true);
+            try {
+              const r = await forceResyncAllLocalEntries();
+              if (r.error) {
+                showToast(r.error, 'error');
+              } else if (r.attempted === 0) {
+                showToast(t('manage.forceResyncNoEntries'), 'info');
+              } else {
+                showToast(`${r.succeeded}/${r.attempted} ${t('manage.forceResyncDone')}`, 'success');
+              }
+            } catch (e) {
+              showToast(e instanceof Error ? e.message : t('toast.error'), 'error');
+            } finally {
+              setResyncRunning(false);
+            }
+          }}
+          disabled={resyncRunning}
+          className="btn btn-success flex items-center gap-2"
+          style={{ opacity: resyncRunning ? 0.5 : 1 }}
+        >
+          <UploadCloud className="w-4 h-4" />
+          {resyncRunning ? t('ui.loading') : t('manage.forceResyncBtn')}
+        </button>
+      </div>
 
       {/* Delete All Data — admin only (would wipe Format/Tätigkeit master data otherwise) */}
       {isAdmin && (
