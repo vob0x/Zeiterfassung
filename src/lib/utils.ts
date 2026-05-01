@@ -318,6 +318,64 @@ export function computeWallClockMs(
 }
 
 /**
+ * Wall-clock total INCLUDING currently-running timers.
+ *
+ * Why this exists separately from computeWallClockMs:
+ *   The naive `todayTotalMs + runningTotalMs` we used in TimerView would
+ *   add a running timer's elapsed time on top of the saved-entries union.
+ *   When the user stopped that timer, its interval was unioned with the
+ *   existing saved entries — and any overlap collapsed — so the displayed
+ *   total visibly DROPPED on stop. That's confusing and erodes trust in
+ *   the daily counter.
+ *
+ *   The fix is to project each running timer as a virtual interval
+ *   [start_time, now] and union it with the saved entries BEFORE summing.
+ *   Stopping a timer then just replaces the virtual interval with a real
+ *   entry holding the same boundaries — the union is unchanged, the total
+ *   stays stable.
+ *
+ * Inputs:
+ *   - savedEntries: TimeEntry rows (the "official" data).
+ *   - runningTimers: a list of slots with their current elapsed_ms. Paused
+ *     timers can be passed too — the elapsed value already accounts for
+ *     pausedMs, and including them lets the wall-clock reflect work
+ *     captured-but-not-yet-saved.
+ *
+ *   `now` is captured at call time so all virtual intervals end at the
+ *   same instant. Caller passes the same now used for elapsed calculation
+ *   to keep things deterministic during a render.
+ */
+export function computeLiveWallClockMs(
+  savedEntries: Array<{ date: string; start_time: string; end_time: string; duration_ms?: number }>,
+  runningTimers: Array<{ elapsedMs: number; isPaused?: boolean }>,
+  now: Date = new Date()
+): number {
+  // Build virtual entries for each running timer: end = now, start = now -
+  // elapsed. Date is "today" in local time (matches TimerView's todayEntries
+  // bucket, so they go into the same per-day union).
+  const todayISO = formatDateISO(now);
+  const virtualEntries: Array<{ date: string; start_time: string; end_time: string }> = [];
+  for (const t of runningTimers) {
+    if (!t || !t.elapsedMs || t.elapsedMs < 1000) continue;
+    const startMs = now.getTime() - t.elapsedMs;
+    const startDate = new Date(startMs);
+    // If the timer started on a previous calendar day (rare — a timer left
+    // running across midnight) we still attribute the whole interval to
+    // today's wall-clock; the saved-entry path will eventually split it
+    // when the user stops the timer. Showing the full elapsed time in
+    // today's counter is more honest than dropping the pre-midnight
+    // portion silently.
+    const startTime = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
+    const endTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    if (startTime === endTime) continue; // sub-minute, skip
+    virtualEntries.push({ date: todayISO, start_time: startTime, end_time: endTime });
+  }
+  // Union saved entries + virtual running intervals through the same
+  // per-day algorithm. Overlap is collapsed correctly.
+  return computeWallClockMs([...savedEntries, ...virtualEntries]);
+}
+
+/**
  * Get week range [monday, sunday] in ISO format
  */
 export function getWeekRange(): [string, string] {

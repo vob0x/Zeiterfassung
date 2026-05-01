@@ -367,6 +367,19 @@ export const de = {
     error: "Fehler:",
     noExport: "Keine Einträge zum Exportieren.",
     stopSaveFailed: "Speichern fehlgeschlagen — Timer bleibt erhalten, bitte erneut versuchen",
+    stopSaved: "Gespeichert",
+  },
+
+  // Recovery banner — surfaces unconfirmed stop attempts
+  recovery: {
+    title: "{count} Timer-Stops konnten nicht verifiziert werden",
+    subtitle: "Diese Einträge wurden vermutlich nicht gespeichert. Möchtest du sie wiederherstellen?",
+    restore: "Wiederherstellen",
+    restoreAll: "Alle wiederherstellen",
+    discard: "Verwerfen",
+    discardAll: "Alle verwerfen",
+    restored: "Eintrag wiederhergestellt",
+    restoreFailed: "Wiederherstellen fehlgeschlagen",
   },
 
   // Confirmations

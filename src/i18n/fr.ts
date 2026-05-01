@@ -364,6 +364,19 @@ export const fr = {
     error: "Erreur :",
     noExport: "Aucune entrée à exporter.",
     stopSaveFailed: "Échec de l'enregistrement — le chrono est conservé, veuillez réessayer",
+    stopSaved: "Enregistré",
+  },
+
+  // Recovery banner — surfaces unconfirmed stop attempts
+  recovery: {
+    title: "{count} arrêts de chrono n'ont pas pu être vérifiés",
+    subtitle: "Ces entrées n'ont probablement pas été sauvegardées. Voulez-vous les restaurer ?",
+    restore: "Restaurer",
+    restoreAll: "Tout restaurer",
+    discard: "Ignorer",
+    discardAll: "Tout ignorer",
+    restored: "Entrée restaurée",
+    restoreFailed: "Échec de la restauration",
   },
 
   // Confirmations

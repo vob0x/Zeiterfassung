@@ -4,12 +4,13 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useI18n } from '../../i18n';
 import { useIsMitarbeiter } from '../../hooks/useRole';
-import { formatDurationHM, getTodayISO, computeWallClockMs } from '../../lib/utils';
+import { formatDurationHM, getTodayISO, computeWallClockMs, computeLiveWallClockMs } from '../../lib/utils';
 import { Plus } from 'lucide-react';
 import TimerLane from './TimerLane';
 import FuzzySearch from './FuzzySearch';
 import ManualEntry from './ManualEntry';
 import DayRing from './DayRing';
+import RecoveryBanner from './RecoveryBanner';
 
 // Inject orb breathing animation once
 const styleId = 'stack-timer-orb-breathe';
@@ -47,30 +48,22 @@ const TimerView: React.FC = () => {
   // double-count toward the daily goal ring.
   const todayTotalMs = useMemo(() => computeWallClockMs(todayEntries), [todayEntries]);
 
-  // Running timers total (live), Wall-Clock-aware.
-  //
-  // The naive "sum of all elapsed values" double-counts parallel timers —
-  // two AI-tasks tracked simultaneously from 10:00 for one hour each
-  // would add up to 2h but only 1h of presence has passed. We approximate
-  // wall-clock as the MAXIMUM elapsed across active running timers,
-  // which is exact when all running timers started at roughly the same
-  // moment (the typical parallel-task case) and a slight overestimate
-  // only in pathological start-stagger scenarios. Paused timers are
-  // excluded — their accumulated time is already captured in their
-  // pausedMs and will be rolled into Wall-Clock when stopped+saved.
-  const runningTotalMs = useMemo(() => {
-    let max = 0;
-    for (const slot of taskSlots) {
-      if (slot.isPaused) continue;
-      const elapsed = getSlotElapsed(slot.id);
-      if (elapsed > max) max = elapsed;
-    }
-    return max;
-  }, [taskSlots, getSlotElapsed]);
-
   // Daily goal: 8:24
   const dailyGoalMs = 8 * 3600 * 1000 + 24 * 60 * 1000;
-  const combinedMs = todayTotalMs + runningTotalMs;
+
+  // Live wall-clock total: saved entries + currently-running timers,
+  // unioned per-day. Replaces the naive `todayTotalMs + runningTotalMs`
+  // that caused the counter to drop on stop when a running timer's
+  // elapsed time overlapped with already-saved entries. The MAX-elapsed
+  // approximation we used previously is gone — the per-day union here is
+  // exact and stable across the stop transition (virtual interval is
+  // replaced by an identical real entry on save, union doesn't move).
+  const combinedMs = useMemo(() => {
+    const runningSlotsForUnion = taskSlots
+      .filter((s) => !s.isPaused)
+      .map((s) => ({ elapsedMs: getSlotElapsed(s.id), isPaused: false }));
+    return computeLiveWallClockMs(todayEntries, runningSlotsForUnion);
+  }, [todayEntries, taskSlots, getSlotElapsed]);
 
   const hasActiveTimers = taskSlots.some((s) => !s.isPaused || s.pausedMs > 0);
   const runningTimers = taskSlots.filter((s) => !s.isPaused);
@@ -167,6 +160,12 @@ const TimerView: React.FC = () => {
 
   return (
     <div className="py-4">
+      {/* Recovery banner — surfaces stop attempts that the journal couldn't
+          verify landed in entries[]. Self-hides when there's nothing open
+          (and is the canonical user-facing UI for the timer-stop journal,
+          paired with lib/stopJournal.ts). */}
+      <RecoveryBanner />
+
       {/* Mitarbeiter: single full-width column (no DayRing / goal sidebar).
           Admin / solo: 2-column grid with DayRing on the right. */}
       <div

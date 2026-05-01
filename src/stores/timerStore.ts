@@ -1,12 +1,34 @@
 import { create } from 'zustand';
 import { TimerSlot } from '@/types';
-import { useEntriesStore } from './entriesStore';
+import { useEntriesStore, generateEntryId } from './entriesStore';
 import { useAuthStore } from './authStore';
 import { useUiStore } from './uiStore';
 import { getUserData, setUserData, removeUserData } from '@/lib/userStorage';
-import { formatDateISO } from '@/lib/utils';
+import { formatDateISO, formatDuration } from '@/lib/utils';
 import { saveNoteToHistory } from '@/components/UI/NoteInput';
 import { supabaseClient, isSupabaseAvailable, ensureValidSession } from '@/lib/supabase';
+import { recordStopAttempt, confirmStopSucceeded } from '@/lib/stopJournal';
+
+// Match TimerLane: only fire the post-stop toast for timers ≥ 30 min.
+const STOP_TOAST_THRESHOLD_MS = 30 * 60 * 1000;
+
+// Tiny inline localizer — Zustand stores can't use the React-only useI18n
+// hook, but we still want German/French toasts. We read the active language
+// from uiStore (which is the canonical source) and pick from a small dict.
+function localize(key: 'stopSaved' | 'stopSaveFailed'): string {
+  const lang = useUiStore.getState().language;
+  const dict = {
+    de: {
+      stopSaved: 'Gespeichert',
+      stopSaveFailed: 'Speichern fehlgeschlagen — Timer bleibt erhalten, bitte erneut versuchen',
+    },
+    fr: {
+      stopSaved: 'Enregistré',
+      stopSaveFailed: 'Échec de l\'enregistrement — le minuteur est conservé, veuillez réessayer',
+    },
+  } as const;
+  return dict[lang]?.[key] ?? dict.de[key];
+}
 
 // Serializable version for localStorage (Date → ISO string)
 interface SerializedSlot {
@@ -388,35 +410,64 @@ export const useTimerStore = create<TimerState>((set, get) => ({
     // (encryption, network) silently disappeared while the slot was
     // already removed, producing the "stopped timer, no entry created"
     // data-loss observed during today's Supabase IO crisis.
+    //
+    // Defense layer: pre-allocate the entry ID and journal the stop attempt
+    // BEFORE awaiting addEntry. If anything between here and confirm goes
+    // sideways — even a happy path that's later corrupted by a bad merge —
+    // the journal entry persists and gets surfaced in the recovery banner.
+    const entryId = generateEntryId();
+    const payload = {
+      date: slot.date || now.toISOString().split('T')[0],
+      stakeholder: slot.stakeholder || [],
+      projekt: slot.projekt || '',
+      taetigkeit: slot.taetigkeit || '',
+      format: slot.format || 'Einzelarbeit',
+      start_time: startTime,
+      end_time: endTime,
+      duration_ms: totalMs,
+      notiz: slot.notiz || '',
+    };
+    const journalId = recordStopAttempt({
+      entryId,
+      payload,
+      source: 'timer-store-stop',
+    });
+
     let saved = false;
     try {
       const entriesStore = useEntriesStore.getState();
       const authStore = useAuthStore.getState();
       await entriesStore.add({
-        date: slot.date || now.toISOString().split('T')[0],
-        stakeholder: slot.stakeholder || [],
-        projekt: slot.projekt || '',
-        taetigkeit: slot.taetigkeit || '',
-        format: slot.format || 'Einzelarbeit',
-        start_time: startTime,
-        end_time: endTime,
-        duration_ms: totalMs,
-        notiz: slot.notiz || '',
+        ...payload,
+        id: entryId,
         user_id: authStore.profile?.id || 'local',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
       saved = true;
+      confirmStopSucceeded(journalId);
 
       // Save note to suggestion history
       if (slot.notiz) saveNoteToHistory(slot.notiz);
+
+      // Long-stop confirmation only — see TimerLane.handleStop for rationale.
+      if (totalMs >= STOP_TOAST_THRESHOLD_MS) {
+        const ctx = (slot.stakeholder?.[0] || slot.projekt || '').slice(0, 32);
+        const label = formatDuration(totalMs);
+        const msg = ctx
+          ? `${localize('stopSaved')} · ${label} · ${ctx}`
+          : `${localize('stopSaved')} · ${label}`;
+        try {
+          useUiStore.getState().showToast(msg, 'success');
+        } catch {}
+      }
     } catch (e) {
       console.error('[TimerSync] entriesStore.add failed:', e);
       // Do NOT remove the slot — the user's work would be lost. Surface
       // a toast so they know something went wrong; the slot stays and
-      // they can retry stop+save.
+      // they can retry stop+save. Journal entry stays put for recovery.
       try {
-        useUiStore.getState().showToast('Speichern fehlgeschlagen — Timer bleibt erhalten, bitte erneut versuchen', 'error');
+        useUiStore.getState().showToast(localize('stopSaveFailed'), 'error');
       } catch {}
       return;
     }

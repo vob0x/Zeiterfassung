@@ -1,16 +1,22 @@
 import React, { useState } from 'react';
 import { TimerSlot } from '@/types';
 import { useTimerStore } from '../../stores/timerStore';
-import { useEntriesStore } from '../../stores/entriesStore';
+import { useEntriesStore, generateEntryId } from '../../stores/entriesStore';
 import { useMasterStore } from '../../stores/masterStore';
 import { useI18n } from '../../i18n';
 import { useUiStore } from '../../stores/uiStore';
 import { useIsMitarbeiter } from '../../hooks/useRole';
 import { X, MessageSquare } from 'lucide-react';
 import { formatDuration, formatDateISO } from '../../lib/utils';
+import { recordStopAttempt, confirmStopSucceeded } from '../../lib/stopJournal';
 import InlinePicker from './InlinePicker';
 import Orb from './Orb';
 import NoteInput from '../UI/NoteInput';
+
+// Threshold for the post-stop "saved" toast: only fire for substantive
+// timers (≥ 30 min). Short timers stay quiet to avoid notification spam
+// during rapid task-switching workflows.
+const STOP_TOAST_THRESHOLD_MS = 30 * 60 * 1000;
 
 interface TimerLaneProps {
   slot: TimerSlot;
@@ -74,18 +80,49 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
     const startDate = new Date(now.getTime() - currentElapsed);
     const startTimeStr = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
 
+    // Pre-allocate the entry ID so the stop journal and the resulting
+    // TimeEntry share an identifier. This is the linchpin of the recovery
+    // path: if the journal entry survives but no entries[] row matches it,
+    // we know addEntry never completed — even if the original error was
+    // swallowed somewhere in the async stack.
+    const entryId = generateEntryId();
+    const payload = {
+      date: slot.date || formatDateISO(now),
+      stakeholder: slot.stakeholder,
+      projekt: slot.projekt,
+      taetigkeit: slot.taetigkeit,
+      format: slot.format,
+      start_time: startTimeStr,
+      end_time: endTime,
+      duration_ms: currentElapsed,
+      notiz: slot.notiz || '',
+    };
+    const journalId = recordStopAttempt({
+      entryId,
+      payload,
+      source: 'lane-stop',
+    });
+
     try {
-      await addEntry({
-        date: slot.date || formatDateISO(now),
-        stakeholder: slot.stakeholder,
-        projekt: slot.projekt,
-        taetigkeit: slot.taetigkeit,
-        format: slot.format,
-        start_time: startTimeStr,
-        end_time: endTime,
-        duration_ms: currentElapsed,
-        notiz: slot.notiz || '',
-      });
+      await addEntry({ ...payload, id: entryId });
+      // Confirm AFTER addEntry resolved successfully — at this point the
+      // entry is persisted in localStorage and (if online) pushed to
+      // Supabase. Removing the journal row tells boot-time recovery
+      // "this stop is accounted for".
+      confirmStopSucceeded(journalId);
+
+      // Long-stop confirmation: we only fire the saved-toast for substantive
+      // timers (≥ 30 min). Short stops happen too often during task-switching
+      // to deserve a notification each time.
+      if (currentElapsed >= STOP_TOAST_THRESHOLD_MS) {
+        const label = formatDuration(currentElapsed);
+        const ctx = (slot.stakeholder?.[0] || slot.projekt || '').slice(0, 32);
+        showToast(
+          ctx ? `${t('toast.stopSaved')} · ${label} · ${ctx}` : `${t('toast.stopSaved')} · ${label}`,
+          'success'
+        );
+      }
+
       // After Stop+Save the slot is fully done — remove it. Previously we
       // resetSlot()'d which left an empty paused lane sitting in the
       // "Pausiert" section, indistinguishable from real paused timers
@@ -97,7 +134,8 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
       // incident): if addEntry throws (encryption error, localStorage
       // quota, etc.), KEEP the slot so the user's work isn't silently
       // lost. Surface a visible toast so they know something went wrong
-      // and can retry.
+      // and can retry. The journal entry stays put so recovery can pick
+      // it up if the user closes the tab without retrying.
       console.error('Failed to save entry:', error);
       showToast(t('toast.stopSaveFailed'), 'error');
     }

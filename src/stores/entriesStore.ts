@@ -20,6 +20,14 @@ function generateUUID(): string {
   });
 }
 
+// Exposed so callers (timer-stop journal) can pre-allocate an entry ID
+// before invoking add(). Letting the caller own the ID lets us record a
+// "we tried to create entry X" journal row before add() runs any async
+// work — and confirm against the same ID after.
+export function generateEntryId(): string {
+  return generateUUID();
+}
+
 /**
  * Normalized fingerprint for duplicate detection.
  * Includes: date, start_time, end_time, projekt, taetigkeit, format, stakeholder.
@@ -707,8 +715,14 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
         stakeholder = '';
       }
 
+      // Honor a caller-supplied UUID if it looks valid (used by the timer-
+      // stop journal so the journal entry and the resulting TimeEntry share
+      // an ID — that's what makes the recovery dedup work). Otherwise we
+      // generate one ourselves.
+      const candidateId = (entry as any).id;
+      const usePassedId = typeof candidateId === 'string' && isValidUUID(candidateId);
       const newEntry: TimeEntry = {
-        id: generateUUID(),
+        id: usePassedId ? candidateId : generateUUID(),
         user_id: (entry as any).user_id || 'local',
         date: entry.date,
         stakeholder: stakeholder,
