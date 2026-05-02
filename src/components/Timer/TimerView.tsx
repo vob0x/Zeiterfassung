@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTimerStore, findMatchingSlot } from '../../stores/timerStore';
 import { useEntriesStore } from '../../stores/entriesStore';
 import { useUiStore } from '../../stores/uiStore';
@@ -37,6 +37,20 @@ const TimerView: React.FC = () => {
   const showToast = useUiStore((s) => s.showToast);
   // Mitarbeiter sees a focused task list — no DayRing, no goal-reach animations.
   const isMitarbeiter = useIsMitarbeiter();
+  // Click-debounce for End-Day. stopAllTimers iterates sequentially through
+  // every running slot — that's seconds of awaits where a fast second click
+  // would re-fire the whole loop and re-process the same slots, producing
+  // duplicate entries. The flag locks the button for the duration.
+  const [isEndingDay, setIsEndingDay] = useState(false);
+  const handleEndDay = async () => {
+    if (isEndingDay) return;
+    setIsEndingDay(true);
+    try {
+      await stopAllTimers();
+    } finally {
+      setIsEndingDay(false);
+    }
+  };
 
   // Today's saved entries
   const todayEntries = useMemo(() => {
@@ -206,21 +220,26 @@ const TimerView: React.FC = () => {
 
             {hasActiveTimers && (
               <button
-                onClick={stopAllTimers}
+                onClick={handleEndDay}
+                disabled={isEndingDay}
                 className="px-3 py-1 text-xs font-semibold rounded transition-all"
                 style={{
                   background: 'rgba(212, 112, 110, 0.08)',
                   color: 'var(--danger)',
                   border: '1px solid rgba(212, 112, 110, 0.18)',
+                  cursor: isEndingDay ? 'wait' : 'pointer',
+                  opacity: isEndingDay ? 0.5 : 1,
                 }}
                 onMouseEnter={(e) => {
+                  if (isEndingDay) return;
                   e.currentTarget.style.background = 'rgba(212, 112, 110, 0.15)';
                 }}
                 onMouseLeave={(e) => {
+                  if (isEndingDay) return;
                   e.currentTarget.style.background = 'rgba(212, 112, 110, 0.08)';
                 }}
               >
-                {t('timer.endDay')}
+                {isEndingDay ? t('timer.endingDay') : t('timer.endDay')}
               </button>
             )}
           </div>

@@ -25,6 +25,13 @@ interface TimerLaneProps {
 const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
   const { t } = useI18n();
   const [showNotiz, setShowNotiz] = useState(!!slot.notiz);
+  // Click-debounce for the Stop button. addEntry can take seconds when
+  // encryption + Supabase upsert are involved, and the slot stays visible
+  // throughout — a second click during that window used to fire handleStop
+  // twice and produce near-duplicate entries (same start_time, end_time off
+  // by a minute). isStopping disables the button until the first attempt
+  // resolves either way.
+  const [isStopping, setIsStopping] = useState(false);
   const { showToast } = useUiStore();
   const {
     pauseTimer,
@@ -69,11 +76,19 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
 
   // Stop & save
   const handleStop = async () => {
+    // Re-entrancy guard: a second click while the first is still awaiting
+    // addEntry must not fire a duplicate save. The disabled prop on the
+    // button is the visible signal; this check is the belt for the click
+    // race that can sneak through (keyboard repeat, double-tap on touch,
+    // a fast re-render where the button briefly re-enables).
+    if (isStopping) return;
+
     const currentElapsed = getSlotElapsed(slot.id);
     if (currentElapsed < 1000) {
       showToast(t('toast.tooShort'), 'warning');
       return;
     }
+    setIsStopping(true);
 
     const now = new Date();
     const endTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -138,6 +153,12 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
       // it up if the user closes the tab without retrying.
       console.error('Failed to save entry:', error);
       showToast(t('toast.stopSaveFailed'), 'error');
+    } finally {
+      // On success the slot is already gone (removeSlot ran), so this
+      // setState targets an unmounted component which React safely no-ops.
+      // On failure the slot stays — re-enable the button so the user can
+      // retry the stop.
+      setIsStopping(false);
     }
   };
 
@@ -207,6 +228,7 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
       {hasTime && (
         <button
           onClick={handleStop}
+          disabled={isStopping}
           style={{
             width: 26,
             height: 26,
@@ -214,7 +236,8 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
             border: `1px solid ${isRunning ? '#D4706E35' : 'var(--border)'}`,
             background: 'transparent',
             color: isRunning ? 'var(--danger)' : 'var(--text-muted)',
-            cursor: 'pointer',
+            cursor: isStopping ? 'wait' : 'pointer',
+            opacity: isStopping ? 0.5 : 1,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -223,18 +246,20 @@ const TimerLane: React.FC<TimerLaneProps> = ({ slot }) => {
             transition: 'all 0.2s',
           }}
           onMouseEnter={(e) => {
+            if (isStopping) return;
             e.currentTarget.style.borderColor = 'var(--danger)';
             e.currentTarget.style.color = 'var(--danger)';
             e.currentTarget.style.background = 'rgba(212, 112, 110, 0.08)';
           }}
           onMouseLeave={(e) => {
+            if (isStopping) return;
             e.currentTarget.style.borderColor = isRunning ? '#D4706E35' : 'var(--border)';
             e.currentTarget.style.color = isRunning ? 'var(--danger)' : 'var(--text-muted)';
             e.currentTarget.style.background = 'transparent';
           }}
-          title={t('timer.stopSave')}
+          title={isStopping ? t('timer.stopSaving') : t('timer.stopSave')}
         >
-          ■
+          {isStopping ? '⋯' : '■'}
         </button>
       )}
 

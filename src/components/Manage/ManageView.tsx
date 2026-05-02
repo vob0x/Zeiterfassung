@@ -8,6 +8,7 @@ import { clearAllUserData } from '../../lib/userStorage';
 import { useIsAdmin, useIsMitarbeiter } from '../../hooks/useRole';
 import ConfirmDialog from '../UI/ConfirmDialog';
 import DuplicateReview from './DuplicateReview';
+import EntryDuplicatesPanel from './EntryDuplicatesPanel';
 import BatchEditPanel from './BatchEditPanel';
 import { Pencil, Trash2, Search, Lock, Database, UploadCloud } from 'lucide-react';
 
@@ -525,6 +526,13 @@ export default function ManageView() {
           </button>
         </div>
       </div>
+
+      {/* Entry-Duplikate prüfen — admin only.
+          Deckt Near-Duplicates (gleiche Dimensionen + überlappende Zeit)
+          in den Time-Entries auf. Häufigster Auslöser: vor dem Stop-
+          Click-Debounce konnte ein Doppelklick zwei Einträge mit
+          minimal verschobenen Boundaries erzeugen. */}
+      {isAdmin && <EntryDuplicatesPanel />}
 
       {/* Datenbank bereinigen — admin only.
           Räumt historische Master-Data-Duplikate auf, die durch das alte
