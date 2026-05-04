@@ -441,6 +441,7 @@ export function findTrackingGaps(
   const trackedMin = merged.reduce((sum, [s, e]) => sum + (e - s), 0);
 
   const gaps: TrackingGap[] = [];
+  let listedGapMin = 0;
   for (let i = 1; i < merged.length; i++) {
     const gapStart = merged[i - 1][1];
     const gapEnd = merged[i][0];
@@ -457,16 +458,22 @@ export function findTrackingGaps(
       end: fmt(gapEnd),
       durationMs: gapDuration * 60_000,
     });
+    listedGapMin += gapDuration;
   }
   // Sort by size descending — biggest gaps first so the user sees the
   // most actionable ones at the top.
   gaps.sort((a, b) => b.durationMs - a.durationMs);
 
+  // gapMs is intentionally the SUM OF LISTED GAPS only (not bruttoMs −
+  // trackedMs). The naive total would include sub-minGap gaps that
+  // don't appear in the list — leading to "8 Lücken · 52min insgesamt"
+  // while the visible list only sums to 33min. By summing exactly what
+  // the user can see, the widget's total stays consistent with its list.
   return {
     gaps,
     bruttoMs: bruttoMin * 60_000,
     trackedMs: trackedMin * 60_000,
-    gapMs: (bruttoMin - trackedMin) * 60_000,
+    gapMs: listedGapMin * 60_000,
   };
 }
 
