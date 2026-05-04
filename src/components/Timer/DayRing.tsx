@@ -1,6 +1,7 @@
 import React from 'react';
 import { useI18n } from '../../i18n';
 import { formatDurationHM } from '../../lib/utils';
+import InfoTooltip from '../UI/InfoTooltip';
 
 interface Segment {
   color: string;
@@ -228,6 +229,7 @@ const DayRing: React.FC<DayRingProps> = ({ segments, trackedMs, presenceMs, goal
               }}
             />
             <span style={{ color: 'var(--text)' }}>{t('ring.presenceLabel')}</span>
+            <InfoTooltip text={t('ring.tooltipPresence')} />
           </span>
           <span
             className="font-mono"
@@ -256,6 +258,7 @@ const DayRing: React.FC<DayRingProps> = ({ segments, trackedMs, presenceMs, goal
               }}
             />
             <span style={{ color: 'var(--text)' }}>{t('ring.trackedLabel')}</span>
+            <InfoTooltip text={t('ring.tooltipTracked')} />
           </span>
           <span
             className="font-mono"

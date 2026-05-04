@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../i18n';
 import { formatHoursAdaptive } from '../../lib/utils';
+import InfoTooltip from '../UI/InfoTooltip';
 
 interface KpiCardsProps {
   today: number;   // hours (float)
@@ -68,7 +69,10 @@ export function KpiCards({ today, period, entries, todayLabel, periodLabel, onDr
       >
         <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to bottom right, rgba(201,169,98,0.05), rgba(110,196,158,0.05))' }} />
         <div className="relative z-10">
-          <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>{todayLbl}</div>
+          <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+            {todayLbl}
+            <InfoTooltip text={t('kpi.tooltipToday')} />
+          </div>
           <div className="text-4xl font-bold" style={{ color: 'var(--neon-cyan)' }}>
             <AnimatedValue value={today} mode="hours" />
           </div>
@@ -84,7 +88,10 @@ export function KpiCards({ today, period, entries, todayLabel, periodLabel, onDr
       >
         <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to bottom right, rgba(110,196,158,0.05), rgba(91,164,217,0.05))' }} />
         <div className="relative z-10">
-          <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>{periodLbl}</div>
+          <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+            {periodLbl}
+            <InfoTooltip text={t('kpi.tooltipPeriod')} />
+          </div>
           <div className="text-4xl font-bold" style={{ color: '#6EC49E' }}>
             <AnimatedValue value={period} mode="hours" />
           </div>
@@ -100,7 +107,10 @@ export function KpiCards({ today, period, entries, todayLabel, periodLabel, onDr
       >
         <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to bottom right, rgba(155,142,196,0.05), rgba(212,112,110,0.05))' }} />
         <div className="relative z-10">
-          <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>{t('kpi.entries')}</div>
+          <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+            {t('kpi.entries')}
+            <InfoTooltip text={t('kpi.tooltipEntries')} />
+          </div>
           <div className="text-4xl font-bold" style={{ color: '#9B8EC4' }}>
             <AnimatedValue value={entries} mode="count" />
           </div>

@@ -1,7 +1,27 @@
 import { useMemo } from 'react';
 import { TimeEntry } from '@/types';
 import { useI18n } from '../../i18n';
-import { getEffectiveDurationMs } from '../../lib/utils';
+// Cell-level metric is Präsenz per (member, date) — first start_time
+// to last end_time of that person's entries on that day. Matches the
+// "wer war wann aktiv"-Semantik der Card. Multitasking-Aufschlüsselung
+// findet sich in den Stakeholder×Person / Projekt×Person Tabellen.
+function presenceMinutes(entries: Array<{ start_time: string; end_time: string }>): number {
+  let earliest: number | null = null;
+  let latest: number | null = null;
+  for (const e of entries) {
+    if (!e.start_time || !e.end_time) continue;
+    const [sh, sm] = e.start_time.split(':').map(Number);
+    const [eh, em] = e.end_time.split(':').map(Number);
+    if ([sh, sm, eh, em].some((v) => Number.isNaN(v))) continue;
+    let s = sh * 60 + sm;
+    let en = eh * 60 + em;
+    if (en < s) en += 24 * 60;
+    if (earliest == null || s < earliest) earliest = s;
+    if (latest == null || en > latest) latest = en;
+  }
+  if (earliest == null || latest == null) return 0;
+  return Math.max(0, latest - earliest);
+}
 import { isAbsenceEntry, isOvertimeDate, overtimeLabel } from '../../lib/absences';
 
 interface TeamDailyProps {
@@ -44,16 +64,15 @@ export function TeamDaily({ memberEntries, entries }: TeamDailyProps) {
 
       for (const date of uniqueDates) {
         const memberDateEntries = (memberEntries.get(memberId) || []).filter((e) => e.date === date);
-        // Cell hours = naive sum of non-absence entry durations. Switched
-        // from wall-clock-union after the headline KPIs moved to naive
-        // sum to keep the daily cells consistent with what the rest of
-        // the dashboard shows. Parallel work (two media calls at the
-        // same time) now counts in full per cell — same as in the
-        // Stakeholder×Person and Tätigkeit/Format breakdowns.
+        // Cell hours = Präsenz per member per day: first entry start →
+        // last entry end. Matches the "wer war wann aktiv"-Card-Titel.
+        // Naive multitasking-Sum lebt in den Stakeholder×Person und
+        // Projekt×Person Cards weiter unten — dort macht
+        // Doppelzählung als Attribution Sinn, hier in der
+        // Tagesübersicht aber nicht (wir waren NICHT 11.3h aktiv,
+        // sondern 9:37h).
         const workEntries = memberDateEntries.filter((e) => !isAbsenceEntry(e));
-        const hours =
-          workEntries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0) /
-          (1000 * 60 * 60);
+        const hours = presenceMinutes(workEntries) / 60;
         matrix[memberId][date] = hours;
         // Only count weekdays (Mo–Fr) for the average — weekend work
         // is voluntary/exceptional and shouldn't dilute the daily average.

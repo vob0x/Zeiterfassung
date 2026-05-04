@@ -207,6 +207,8 @@ export const fr = {
     presence: "Présence",       // legacy
     presenceLabel: "Présence (première entrée → dernière entrée)",
     trackedLabel: "Suivi (Wallclock-Union)",
+    tooltipPresence: "De la première à la dernière entrée aujourd'hui — votre fenêtre brute de travail. 9h37 signifie : première entrée à 07:49, dernière à 17:26. Ce n'est pas forcément le temps réellement travaillé — les trous (pause déjeuner, oubli de saisie) sont inclus.",
+    tooltipTracked: "Wallclock-Union des intervalles de chrono actif. Heures pendant lesquelles un chrono tournait réellement (le multitâche compte 1, pas double). Le pourcentage de couverture indique quelle part de votre présence était couverte par des chronos.",
   },
 
   // Widget de couverture du tracking (onglet Timer)
@@ -219,6 +221,7 @@ export const fr = {
     oneGap: "1 trou · {dur}",
     nGaps: "{n} trous · {dur} au total",
     hint: "Les trous ≥30min sont mis en évidence — probablement oubliés.",
+    tooltip: "Combien d'heures de la journée un chrono tournait réellement. Différence avec la Présence = trous (pause déjeuner, oubli, …). La couverture en % indique la proportion — 90+% est très bon, moins signifie qu'il faut combler.",
   },
 
   // Report-Generator (Dashboard)
@@ -298,6 +301,8 @@ export const fr = {
     perPerson: "⌀/Personne",
     perDay: "⌀/Jour",
     total: "Total",
+    presenceLabel: "Présence",
+    presenceCellTooltip: "Temps de travail réel — de la première à la dernière entrée de cette personne, additionné sur tous les jours de la période. Pas la somme de la colonne (qui serait une attribution multitâche).",
     today: "aujourd'hui",
     avgWorkday: "⌀ / Jour ouvrable",
     create: "Créer une équipe",
@@ -345,6 +350,9 @@ export const fr = {
     entriesSubtitle: "Entrées",
     todayPresence: "Saisie aujourd'hui",
     periodPresence: "Saisie sur la période",
+    tooltipToday: "Somme de toutes les durées d'entrées saisies aujourd'hui. Le multitâche est compté pleinement — deux appels téléphoniques simultanés de 30min chacun donnent 1h, alors que seulement 30min de temps réel se sont écoulées. Détails dans les tableaux ci-dessous (Stakeholder × Personne, etc.).",
+    tooltipPeriod: "Somme de toutes les durées d'entrées dans la période. Même sémantique qu'« Saisie aujourd'hui ». Avec un filtre actif (Stakeholder, Projet, …), c'est la somme du sous-ensemble filtré.",
+    tooltipEntries: "Nombre d'entrées dans la période (sans les entrées d'absence comme vacances/maladie).",
     workFor: "Travail pour",
     workOn: "Travail sur",
     timeIn: "Temps en",

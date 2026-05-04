@@ -17,6 +17,7 @@ import { Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useEntriesStore } from '../../stores/entriesStore';
 import { useI18n } from '../../i18n';
 import { findTrackingGaps, getTodayISO, formatDuration } from '../../lib/utils';
+import InfoTooltip from '../UI/InfoTooltip';
 
 const TrackingCoverage: React.FC = () => {
   const { t } = useI18n();
@@ -57,12 +58,12 @@ const TrackingCoverage: React.FC = () => {
       >
         <Clock size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ color: 'var(--text)' }}>
+          <div style={{ color: 'var(--text)', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ color: 'var(--text-muted)', marginRight: '4px' }}>
               {t('coverage.label')}
             </span>
-            <strong>{formatDuration(trackedMs)}</strong>{' '}
-            <span style={{ color: 'var(--text-muted)' }}>
+            <strong>{formatDuration(trackedMs)}</strong>
+            <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>
               {t('coverage.of')} {formatDuration(bruttoMs)} {t('coverage.presence')}
             </span>
             <span
@@ -73,6 +74,7 @@ const TrackingCoverage: React.FC = () => {
             >
               ({coveragePct}%)
             </span>
+            <InfoTooltip text={t('coverage.tooltip')} />
           </div>
           {hasGaps && (
             <div

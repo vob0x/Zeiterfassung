@@ -207,6 +207,8 @@ export const de = {
     presence: "Präsenz",      // legacy
     presenceLabel: "Präsenz (erster Eintrag → letzter Eintrag)",
     trackedLabel: "Getrackt (Wallclock-Union)",
+    tooltipPresence: "Vom ersten bis zum letzten Eintrag heute, also dein Brutto-Arbeitsfenster. 9:37h heißt: erster Eintrag startete um 07:49, letzter endete um 17:26. Dieser Wert ist nicht zwingend die wirklich gearbeitete Zeit — Lücken (z.B. Mittagspause, vergessen zu tracken) sind enthalten.",
+    tooltipTracked: "Wallclock-Union der aktiven Tracker-Intervalle. So viele Stunden lief tatsächlich ein Timer (paralleles Arbeiten gilt als 1, nicht doppelt). Der Coverage-%-Wert daneben sagt dir, welcher Anteil deiner Präsenz mit Trackern abgedeckt wurde.",
   },
 
   // Tracking-Coverage Widget (Timer-Tab) — Disclaimer und Lücken
@@ -219,6 +221,7 @@ export const de = {
     oneGap: "1 Lücke · {dur}",
     nGaps: "{n} Lücken · {dur} insgesamt",
     hint: "Lücken ≥30min sind hervorgehoben — vermutlich vergessen zu tracken.",
+    tooltip: "Während wie vieler Stunden des Arbeitstages lief tatsächlich ein Tracker. Differenz zur Präsenz = Lücken (Mittagspause, vergessen zu tracken, …). Coverage-% zeigt den Anteil — 90+% ist sehr gut, weniger heißt nachtragen.",
   },
 
   // Report-Generator (Dashboard)
@@ -298,6 +301,8 @@ export const de = {
     perPerson: "⌀/Person",
     perDay: "⌀/Tag",
     total: "Total",
+    presenceLabel: "Präsenz",
+    presenceCellTooltip: "Geleistete Arbeit — vom ersten bis letzten Eintrag dieser Person, summiert über alle Tage des Zeitraums. Nicht die Summe der Spalte (die wäre eine Multitasking-Attribution).",
     today: "heute",
     avgWorkday: "⌀ / Arbeitstag",
     create: "Team erstellen",
@@ -348,6 +353,9 @@ export const de = {
     // so the same headline number stays semantically clear.
     todayPresence: "Erfasst Heute",
     periodPresence: "Erfasst im Zeitraum",
+    tooltipToday: "Summe aller heute getrackten Eintragsdauern. Bei parallelem Arbeiten zählt jede Aufgabe voll — z.B. zwei gleichzeitige Telefonate von je 30min ergeben 1h, obwohl nur 30min Wanduhr-Zeit vergangen ist. Aufschlüsselung in den Tabellen unten (Stakeholder × Person etc.).",
+    tooltipPeriod: "Summe aller Eintragsdauern im gewählten Zeitraum. Gleiche Semantik wie 'Erfasst Heute' — Multitasking-Anrechnung pro Aufgabe. Bei aktivem Filter (Stakeholder, Projekt, …) ist es die gefilterte Teilmenge.",
+    tooltipEntries: "Anzahl Einträge im Zeitraum (ohne Abwesenheits-Einträge wie Ferien/Krankheit).",
     workFor: "Arbeit für",
     workOn: "Arbeit an",
     timeIn: "Zeit in",
