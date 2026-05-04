@@ -1606,6 +1606,113 @@ export async function forceResyncAllLocalEntries(): Promise<{ attempted: number;
 }
 
 /**
+ * Fetch soft-deleted entries (tombstones) from Supabase, decrypted.
+ *
+ * Used by the "Versehentliche Löschungen wiederherstellen" admin tool.
+ * Returns entries deleted within the last `lookbackDays` so the recovery
+ * panel doesn't have to render years of historic deletes. Sorted by
+ * deleted_at desc — most recent first.
+ */
+export async function fetchDeletedEntries(
+  lookbackDays: number = 30
+): Promise<{ entries: TimeEntry[]; error?: string }> {
+  const profile = useAuthStore.getState().profile;
+  if (!isSupabaseAvailable() || !supabaseClient) {
+    return { entries: [], error: 'Supabase nicht verfügbar' };
+  }
+  if (!profile?.id || profile.id.startsWith('local_')) {
+    return { entries: [], error: 'Kein Online-Account' };
+  }
+  if (!hasEncryptionKey()) {
+    return { entries: [], error: 'Verschlüsselungsschlüssel nicht verfügbar' };
+  }
+  const sessionOk = await ensureValidSession();
+  if (!sessionOk) return { entries: [], error: 'Sitzung abgelaufen' };
+
+  const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString();
+  try {
+    const { data, error } = await supabaseClient
+      .from('time_entries')
+      .select('*')
+      .eq('user_id', profile.id)
+      .not('deleted_at', 'is', null)
+      .gte('deleted_at', since)
+      .order('deleted_at', { ascending: false });
+    if (error) return { entries: [], error: error.message };
+    if (!data) return { entries: [] };
+
+    const decrypted = await Promise.all(
+      data.map(async (row: any) => {
+        const d = await decryptEntryFromSupabase(row);
+        let stakeholder: string | string[] = d.stakeholder || '';
+        if (typeof stakeholder === 'string' && stakeholder) stakeholder = [stakeholder];
+        return {
+          id: d.id,
+          user_id: d.user_id,
+          date: typeof d.date === 'string' ? d.date : formatDateISO(new Date(d.date)),
+          stakeholder,
+          projekt: d.projekt || '',
+          taetigkeit: d.taetigkeit || '',
+          format: d.format || 'Einzelarbeit',
+          start_time: d.start_time || '',
+          end_time: d.end_time || '',
+          duration_ms: d.duration_ms || 0,
+          notiz: d.notiz || '',
+          created_at: d.created_at || '',
+          updated_at: d.updated_at || '',
+          deleted_at: d.deleted_at || null,
+        } as TimeEntry;
+      })
+    );
+    return { entries: decrypted };
+  } catch (e) {
+    return { entries: [], error: e instanceof Error ? e.message : 'Unbekannter Fehler' };
+  }
+}
+
+/**
+ * Restore a tombstoned entry — sets deleted_at = NULL and re-inserts the
+ * row into local entries[]. The entry's other fields (start, end,
+ * dimensions) are preserved as-is from before the delete.
+ *
+ * Idempotent on already-restored entries: the UPDATE ... is null filter
+ * means a no-op rather than an error. The local-state path checks for
+ * an existing row by id before adding so double-clicks don't duplicate.
+ */
+export async function restoreDeletedEntry(
+  entry: TimeEntry
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseAvailable() || !supabaseClient) {
+    return { ok: false, error: 'Supabase nicht verfügbar' };
+  }
+  const sessionOk = await ensureValidSession();
+  if (!sessionOk) return { ok: false, error: 'Sitzung abgelaufen' };
+
+  try {
+    const { error } = await supabaseClient
+      .from('time_entries')
+      .update({ deleted_at: null, updated_at: new Date().toISOString() })
+      .eq('id', entry.id);
+    if (error) return { ok: false, error: error.message };
+
+    // Reflect in local state so the entry shows up immediately.
+    useEntriesStore.setState((s) => {
+      if (s.entries.some((e) => e.id === entry.id)) return s;
+      const restored: TimeEntry = { ...entry, deleted_at: null };
+      const updated = [...s.entries, restored];
+      setUserData('entries', updated);
+      return { entries: updated };
+    });
+    // If we had a local tombstone for this id, clear it — the entry
+    // is back, the deletion is reverted everywhere.
+    if (hasLocalTombstone(entry.id)) removeLocalTombstone(entry.id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Unbekannter Fehler' };
+  }
+}
+
+/**
  * Push pending local tombstones to Supabase (retry mechanism for offline
  * deletes). Sets deleted_at on each tombstoned row. Non-blocking.
  */

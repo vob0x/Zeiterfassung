@@ -188,6 +188,24 @@ export const fr = {
     entryDupesApply: "Supprimer les doublons",
     entryDupesCleanAll: "Tout nettoyer",
     dupesRemoved: "doublon(s) supprimé(s).",
+    deletedRecover: "Restaurer les suppressions accidentelles",
+    deletedRecoverHint: "Affiche les entrées supprimées (soft-delete) des 30 derniers jours. Utile après un clic accidentel sur 'Tout nettoyer' — les entrées supprimées restent en Supabase avec un tombstone et peuvent être restaurées individuellement.",
+    deletedLoad: "Charger les entrées supprimées",
+    deletedNone: "Aucune entrée supprimée dans les 30 derniers jours.",
+    deletedAt: "Supprimé le :",
+    deletedRestore: "Restaurer",
+    deletedRestoreAll: "Tout restaurer",
+    deletedRestored: "Entrée restaurée",
+  },
+
+  // Widget de couverture du tracking (onglet Timer)
+  coverage: {
+    label: "Saisi :",
+    of: "sur",
+    brutto: "Brut",
+    oneGap: "1 trou · {dur}",
+    nGaps: "{n} trous · {dur} au total",
+    hint: "Les trous ≥30min sont mis en évidence — probablement oubliés.",
   },
 
   // Report-Generator (Dashboard)
@@ -312,8 +330,8 @@ export const fr = {
     todaySubtitle: "Saisi aujourd'hui",
     periodSubtitle: "Dans la période",
     entriesSubtitle: "Entrées",
-    todayPresence: "Présence aujourd'hui",
-    periodPresence: "Présence sur la période",
+    todayPresence: "Saisie aujourd'hui",
+    periodPresence: "Saisie sur la période",
     workFor: "Travail pour",
     workOn: "Travail sur",
     timeIn: "Temps en",

@@ -4,7 +4,7 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useMasterStore } from '../../stores/masterStore';
 import { useUiStore } from '../../stores/uiStore';
 import { PeriodType, FilterState, TimeEntry } from '@/types';
-import { formatDateISO, formatDateDE, computeWorkWallClockMs, computeOvertimeWallClockMs, computeKpiHours, hasActiveDimensionFilter } from '../../lib/utils';
+import { formatDateISO, formatDateDE, computeOvertimeWallClockMs, computeKpiHours, hasActiveDimensionFilter } from '../../lib/utils';
 import { countAbsenceDays } from '../../lib/absences';
 import { KpiCards } from './KpiCards';
 import { Heatmap } from './Heatmap';
@@ -191,7 +191,11 @@ export default function DashboardView({
   // "Heute" is always Präsenzzeit (the today-view ignores dimension filters
   // by design — todayEntries is a date filter only). "Zeitraum" follows
   // the user's active filter set.
-  const kpiToday = computeWorkWallClockMs(todayEntries) / (1000 * 60 * 60);
+  // Naive sum of today's non-absence entries — matches the breakdowns
+  // (Stakeholder×Person, Tätigkeit, Format, Heatmap) so the headline KPI
+  // and the dimension tables agree on a single number. See computeKpiHours
+  // for the design discussion.
+  const kpiToday = computeKpiHours(todayEntries, {});
 
   const filterContext = useMemo(() => ({
     stakeholder: filters.stakeholder,

@@ -35,6 +35,15 @@ function canonicalStakeholder(sh: string | string[] | undefined): string {
 /**
  * The grouping key. Anything sharing this key is allowed to be compared
  * for overlap. Different keys → different groups, never compared.
+ *
+ * Notiz is part of the key on purpose: the user uses the notiz field to
+ * distinguish parallel work items that share dimensions otherwise (two
+ * media inquiries to Medien/Medienanfragen happening simultaneously,
+ * one labelled "srf mengele", the other "bloomberg mengele"). Treating
+ * those as duplicates flooded the cleanup panel with false positives.
+ * Empty-vs-empty notiz still groups (the original bug case — two
+ * stop-clicks producing two near-identical noteless entries — is
+ * exactly when the notiz field is empty on both sides).
  */
 function dimensionKey(e: TimeEntry): string {
   return [
@@ -43,6 +52,7 @@ function dimensionKey(e: TimeEntry): string {
     e.projekt || '',
     e.taetigkeit || '',
     e.format || '',
+    (e.notiz || '').trim(),
   ].join('::');
 }
 

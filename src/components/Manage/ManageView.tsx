@@ -9,6 +9,7 @@ import { useIsAdmin, useIsMitarbeiter } from '../../hooks/useRole';
 import ConfirmDialog from '../UI/ConfirmDialog';
 import DuplicateReview from './DuplicateReview';
 import EntryDuplicatesPanel from './EntryDuplicatesPanel';
+import DeletedEntriesPanel from './DeletedEntriesPanel';
 import BatchEditPanel from './BatchEditPanel';
 import { Pencil, Trash2, Search, Lock, Database, UploadCloud } from 'lucide-react';
 
@@ -533,6 +534,14 @@ export default function ManageView() {
           Click-Debounce konnte ein Doppelklick zwei Einträge mit
           minimal verschobenen Boundaries erzeugen. */}
       {isAdmin && <EntryDuplicatesPanel />}
+
+      {/* Versehentliche Löschungen wiederherstellen — admin only.
+          Liest die Soft-Delete-Tombstones der letzten 30 Tage aus
+          Supabase, lässt den User selektiv reaktivieren. Wichtig nach
+          versehentlichem "Alle bereinigen"-Klick im Duplikat-Panel
+          (vor dem Notiz-Fix konnte das parallele Arbeit fälschlich
+          als Duplikat behandeln). */}
+      {isAdmin && <DeletedEntriesPanel />}
 
       {/* Datenbank bereinigen — admin only.
           Räumt historische Master-Data-Duplikate auf, die durch das alte

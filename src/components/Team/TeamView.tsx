@@ -9,7 +9,7 @@ import { useIsMitarbeiter, useIsAdmin } from '../../hooks/useRole';
 import ConfirmDialog from '../UI/ConfirmDialog';
 import EditEntryModal from '../Entries/EditEntryModal';
 import { PeriodType, TimeEntry } from '@/types';
-import { formatDateISO, formatDateDE, formatDurationHM, getEffectiveDurationMs, computeWorkWallClockMs, computeOvertimeWallClockMs } from '../../lib/utils';
+import { formatDateISO, formatDateDE, formatDurationHM, getEffectiveDurationMs, computeOvertimeWallClockMs } from '../../lib/utils';
 import { isAbsenceEntry } from '../../lib/absences';
 import { TeamDaily } from './TeamDaily';
 import { TeamMatrix } from './TeamMatrix';
@@ -268,16 +268,21 @@ export default function TeamView() {
   );
 
   // Compute KPIs from filtered data.
-  // totalHours uses wall-clock PER MEMBER excluding absences, then sums.
-  // Per-member union prevents own-overlap double-counting; cross-member
-  // sum is correct (Alice + Bob both 09–10 = 2h team-time). Excluding
-  // absences keeps Ferien/Krankheit out of the productivity numerator.
+  // totalHours = naive sum of non-absence entry durations across all
+  // members. We switched away from per-member wall-clock-union so this
+  // total agrees with the Stakeholder×Person and Tätigkeit/Format
+  // breakdowns shown below, which always use naive sum (each parallel
+  // entry counts fully). Excluding absences keeps Ferien/Krankheit out
+  // of the productivity numerator.
   const totalHours = useMemo(() => {
     let sum = 0;
     filteredMemberEntries.forEach((entries) => {
-      sum += computeWorkWallClockMs(entries) / (1000 * 60 * 60);
+      for (const e of entries) {
+        if (isAbsenceEntry(e)) continue;
+        sum += getEffectiveDurationMs(e);
+      }
     });
-    return sum;
+    return sum / (1000 * 60 * 60);
   }, [filteredMemberEntries]);
   // Overtime = work on weekends/holidays, also per-member then summed.
   const overtimeHours = useMemo(() => {

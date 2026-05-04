@@ -4,13 +4,15 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useI18n } from '../../i18n';
 import { useIsMitarbeiter } from '../../hooks/useRole';
-import { formatDurationHM, getTodayISO, computeWallClockMs, computeLiveWallClockMs } from '../../lib/utils';
+import { formatDurationHM, getTodayISO, getEffectiveDurationMs } from '../../lib/utils';
+import { isAbsenceEntry } from '../../lib/absences';
 import { Plus } from 'lucide-react';
 import TimerLane from './TimerLane';
 import FuzzySearch from './FuzzySearch';
 import ManualEntry from './ManualEntry';
 import DayRing from './DayRing';
 import RecoveryBanner from './RecoveryBanner';
+import TrackingCoverage from './TrackingCoverage';
 
 // Inject orb breathing animation once
 const styleId = 'stack-timer-orb-breathe';
@@ -58,26 +60,36 @@ const TimerView: React.FC = () => {
     return entries.filter((e) => e.date === todayISO);
   }, [entries]);
 
-  // Wall-clock today: union per day so overlapping manual entries don't
-  // double-count toward the daily goal ring.
-  const todayTotalMs = useMemo(() => computeWallClockMs(todayEntries), [todayEntries]);
+  // Today's saved-entry total: naive sum of non-absence durations.
+  // Switched from wall-clock-union together with the dashboard headline
+  // KPIs so the live counter, the dashboard "Erfasst Heute", and the
+  // dimension breakdowns all agree on a single number. Parallel work
+  // counts in full — two media calls at 09:00 and 09:15 contribute
+  // both their durations.
+  const todayTotalMs = useMemo(
+    () =>
+      todayEntries
+        .filter((e) => !isAbsenceEntry(e))
+        .reduce((sum, e) => sum + getEffectiveDurationMs(e), 0),
+    [todayEntries]
+  );
 
   // Daily goal: 8:24
   const dailyGoalMs = 8 * 3600 * 1000 + 24 * 60 * 1000;
 
-  // Live wall-clock total: saved entries + currently-running timers,
-  // unioned per-day. Replaces the naive `todayTotalMs + runningTotalMs`
-  // that caused the counter to drop on stop when a running timer's
-  // elapsed time overlapped with already-saved entries. The MAX-elapsed
-  // approximation we used previously is gone — the per-day union here is
-  // exact and stable across the stop transition (virtual interval is
-  // replaced by an identical real entry on save, union doesn't move).
+  // Live combined total: saved naive sum + running-timer elapsed sum.
+  // Naive throughout — when a running timer stops, its elapsed time
+  // becomes a saved entry of the same duration, so the headline value
+  // doesn't move. Parallel running timers add up (each one is real
+  // tracked work, not a virtual overlap to collapse).
   const combinedMs = useMemo(() => {
-    const runningSlotsForUnion = taskSlots
-      .filter((s) => !s.isPaused)
-      .map((s) => ({ elapsedMs: getSlotElapsed(s.id), isPaused: false }));
-    return computeLiveWallClockMs(todayEntries, runningSlotsForUnion);
-  }, [todayEntries, taskSlots, getSlotElapsed]);
+    let runningSum = 0;
+    for (const s of taskSlots) {
+      if (s.isPaused) continue;
+      runningSum += getSlotElapsed(s.id);
+    }
+    return todayTotalMs + runningSum;
+  }, [todayTotalMs, taskSlots, getSlotElapsed]);
 
   const hasActiveTimers = taskSlots.some((s) => !s.isPaused || s.pausedMs > 0);
   const runningTimers = taskSlots.filter((s) => !s.isPaused);
@@ -361,6 +373,13 @@ const TimerView: React.FC = () => {
             }}
           >
             <DayRing segments={segments} totalMs={combinedMs} goalMs={dailyGoalMs} />
+
+            {/* Tracking-Coverage — surfaces gaps in today's tracking so
+                the user can see at-a-glance whether they forgot to start
+                a timer somewhere. Hides when there's nothing tracked yet. */}
+            <div style={{ width: '100%' }}>
+              <TrackingCoverage />
+            </div>
 
             {/* Active lanes mini-summary */}
             {taskSlots.length > 0 && (

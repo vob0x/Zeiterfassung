@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { TimeEntry } from '@/types';
 import { useI18n } from '../../i18n';
-import { computeUnionMs } from '../../lib/utils';
+import { getEffectiveDurationMs } from '../../lib/utils';
 import { isAbsenceEntry, isOvertimeDate, overtimeLabel } from '../../lib/absences';
 
 interface TeamDailyProps {
@@ -44,11 +44,16 @@ export function TeamDaily({ memberEntries, entries }: TeamDailyProps) {
 
       for (const date of uniqueDates) {
         const memberDateEntries = (memberEntries.get(memberId) || []).filter((e) => e.date === date);
-        // Cell hours exclude absences — Ferien/Krankheit don't count as
-        // worked time. Union avoids double-counting overlapping manual
-        // entries on the same day.
+        // Cell hours = naive sum of non-absence entry durations. Switched
+        // from wall-clock-union after the headline KPIs moved to naive
+        // sum to keep the daily cells consistent with what the rest of
+        // the dashboard shows. Parallel work (two media calls at the
+        // same time) now counts in full per cell — same as in the
+        // Stakeholder×Person and Tätigkeit/Format breakdowns.
         const workEntries = memberDateEntries.filter((e) => !isAbsenceEntry(e));
-        const hours = computeUnionMs(workEntries) / (1000 * 60 * 60);
+        const hours =
+          workEntries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0) /
+          (1000 * 60 * 60);
         matrix[memberId][date] = hours;
         // Only count weekdays (Mo–Fr) for the average — weekend work
         // is voluntary/exceptional and shouldn't dilute the daily average.

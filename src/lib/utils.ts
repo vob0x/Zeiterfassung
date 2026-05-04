@@ -227,24 +227,31 @@ export function hasActiveDimensionFilter(f: KpiFilterContext): boolean {
 /**
  * Context-aware KPI hour calculation.
  *
- * - No dimension filter active → Wall-Clock excluding absences
- *   ("Präsenzzeit" = how long was the user present/working overall)
- * - With dimension filter → naive sum of entry durations for the filtered
- *   set ("geleistete Arbeit für X" = how much time was spent on X, with
- *   each multistakeholder entry counting fully under each dimension)
+ * Both branches now use the SAME semantic: naive sum of entry durations
+ * (excluding absences). This switch — from wall-clock-as-headline to
+ * naive-sum-as-headline — was made after live use surfaced an
+ * inconsistency: the breakdowns (Stakeholder × Person, Tätigkeit, Format,
+ * Heatmap) all show naive sums, while the Präsenzzeit headline showed
+ * wall-clock. Same view, two different numbers, no on-screen
+ * explanation. The user reads the breakdowns as "how much work I did",
+ * so the headline now matches that semantic.
+ *
+ * Wall-clock helpers (computeWallClockMs, computeWorkWallClockMs,
+ * computeOvertimeWallClockMs) stay around — they're correct for things
+ * like overtime calculation where parallel work must NOT double-count.
  *
  * Returns hours, not milliseconds, for direct KPI display.
  */
 export function computeKpiHours(
   entries: Array<{ date: string; start_time: string; end_time: string; duration_ms?: number; taetigkeit?: string }>,
-  filter: KpiFilterContext
+  _filter: KpiFilterContext
 ): number {
-  if (hasActiveDimensionFilter(filter)) {
-    // Naive sum — multistakeholder semantic. Each entry contributes its
-    // own duration regardless of overlap.
-    return entries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0) / 3_600_000;
-  }
-  return computeWorkWallClockMs(entries) / 3_600_000;
+  // Exclude absences (Ferien, Krankheit, …) — they shouldn't pad the
+  // "hours worked" KPI. With a dimension filter active, absences
+  // typically don't match the filter anyway, but the explicit filter
+  // here keeps no-filter and filtered cases on the same code path.
+  const work = entries.filter((e) => !isAbsenceEntry(e));
+  return work.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0) / 3_600_000;
 }
 
 /**
@@ -373,6 +380,94 @@ export function computeLiveWallClockMs(
   // Union saved entries + virtual running intervals through the same
   // per-day algorithm. Overlap is collapsed correctly.
   return computeWallClockMs([...savedEntries, ...virtualEntries]);
+}
+
+/**
+ * Tracking-coverage gap detector.
+ *
+ * Builds the wall-clock-union of the given entries (per-day) and returns
+ * the inverse: the windows between intervals where no tracker was active.
+ * Used by the Timer-tab Coverage widget to surface "you have a 25min
+ * unaccounted window between 11:10 and 11:35 — was that work?".
+ *
+ * Boundaries are taken from the earliest start_time and the latest
+ * end_time across the entries — we don't assume an 8h workday because
+ * the user's actual day length varies (early start, late finish, partial
+ * days). If you want a fixed-window coverage, clamp the result yourself.
+ *
+ * Tiny-gap suppression: gaps below `minGapMinutes` are dropped — there's
+ * no value in surfacing a 1-minute toilet break as "untracked time".
+ */
+export interface TrackingGap {
+  start: string; // HH:MM
+  end: string;   // HH:MM
+  durationMs: number;
+}
+
+export function findTrackingGaps(
+  entries: Array<{ date: string; start_time: string; end_time: string }>,
+  options: { date: string; minGapMinutes?: number } = { date: '' }
+): { gaps: TrackingGap[]; bruttoMs: number; trackedMs: number; gapMs: number } {
+  const minGap = options.minGapMinutes ?? 5;
+  const dayEntries = entries.filter((e) => !options.date || e.date === options.date);
+  if (dayEntries.length === 0) {
+    return { gaps: [], bruttoMs: 0, trackedMs: 0, gapMs: 0 };
+  }
+
+  // Convert to minutes-of-day, build sorted intervals, merge overlaps.
+  const intervals: Array<[number, number]> = [];
+  for (const e of dayEntries) {
+    if (!e.start_time || !e.end_time) continue;
+    const [sh, sm] = e.start_time.split(':').map(Number);
+    const [eh, em] = e.end_time.split(':').map(Number);
+    let start = sh * 60 + sm;
+    let end = eh * 60 + em;
+    if (end < start) end += 24 * 60; // overnight wrap
+    if (end > start) intervals.push([start, end]);
+  }
+  if (intervals.length === 0) {
+    return { gaps: [], bruttoMs: 0, trackedMs: 0, gapMs: 0 };
+  }
+  intervals.sort((a, b) => a[0] - b[0]);
+  const merged: Array<[number, number]> = [[...intervals[0]] as [number, number]];
+  for (let i = 1; i < intervals.length; i++) {
+    const [s, e] = intervals[i];
+    const last = merged[merged.length - 1];
+    if (s <= last[1]) last[1] = Math.max(last[1], e);
+    else merged.push([s, e]);
+  }
+
+  const bruttoMin = merged[merged.length - 1][1] - merged[0][0];
+  const trackedMin = merged.reduce((sum, [s, e]) => sum + (e - s), 0);
+
+  const gaps: TrackingGap[] = [];
+  for (let i = 1; i < merged.length; i++) {
+    const gapStart = merged[i - 1][1];
+    const gapEnd = merged[i][0];
+    const gapDuration = gapEnd - gapStart;
+    if (gapDuration < minGap) continue;
+    const fmt = (m: number) => {
+      const mod = m % (24 * 60);
+      const h = Math.floor(mod / 60);
+      const mm = mod % 60;
+      return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    };
+    gaps.push({
+      start: fmt(gapStart),
+      end: fmt(gapEnd),
+      durationMs: gapDuration * 60_000,
+    });
+  }
+  // Sort by size descending — biggest gaps first so the user sees the
+  // most actionable ones at the top.
+  gaps.sort((a, b) => b.durationMs - a.durationMs);
+
+  return {
+    gaps,
+    bruttoMs: bruttoMin * 60_000,
+    trackedMs: trackedMin * 60_000,
+    gapMs: (bruttoMin - trackedMin) * 60_000,
+  };
 }
 
 /**

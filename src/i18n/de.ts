@@ -188,6 +188,24 @@ export const de = {
     entryDupesApply: "Duplikate entfernen",
     entryDupesCleanAll: "Alle bereinigen",
     dupesRemoved: "Duplikat(e) entfernt.",
+    deletedRecover: "Versehentliche Löschungen wiederherstellen",
+    deletedRecoverHint: "Zeigt soft-gelöschte Einträge der letzten 30 Tage. Nützlich nach einem versehentlichen 'Alle bereinigen'-Klick — gelöschte Einträge bleiben mit Tombstone in Supabase erhalten und können einzeln reaktiviert werden.",
+    deletedLoad: "Gelöschte Einträge laden",
+    deletedNone: "Keine gelöschten Einträge in den letzten 30 Tagen.",
+    deletedAt: "Gelöscht am:",
+    deletedRestore: "Wiederherstellen",
+    deletedRestoreAll: "Alle wiederherstellen",
+    deletedRestored: "Eintrag wiederhergestellt",
+  },
+
+  // Tracking-Coverage Widget (Timer-Tab)
+  coverage: {
+    label: "Erfasst:",
+    of: "von",
+    brutto: "Brutto",
+    oneGap: "1 Lücke · {dur}",
+    nGaps: "{n} Lücken · {dur} insgesamt",
+    hint: "Lücken ≥30min sind hervorgehoben — vermutlich vergessen zu tracken.",
   },
 
   // Report-Generator (Dashboard)
@@ -315,8 +333,8 @@ export const de = {
     // Context-aware labels for the Dashboard KPI cards. The cards switch
     // between "Präsenzzeit" (no filter) and "Arbeit für X" (filter active)
     // so the same headline number stays semantically clear.
-    todayPresence: "Präsenzzeit Heute",
-    periodPresence: "Präsenzzeit Zeitraum",
+    todayPresence: "Erfasst Heute",
+    periodPresence: "Erfasst im Zeitraum",
     workFor: "Arbeit für",
     workOn: "Arbeit an",
     timeIn: "Zeit in",

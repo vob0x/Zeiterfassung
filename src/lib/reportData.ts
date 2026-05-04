@@ -18,7 +18,7 @@
  */
 
 import type { TimeEntry } from '@/types';
-import { computeWallClockMs, computeOvertimeWallClockMs, computeUnionMs, formatDateISO, getEffectiveDurationMs } from './utils';
+import { computeOvertimeWallClockMs, formatDateISO, getEffectiveDurationMs } from './utils';
 import { isAbsenceEntry, countAbsenceDays, type AbsenceDayCounts } from './absences';
 
 const DAILY_GOAL_HOURS = 8.4; // 8h 24min — matches TimerView
@@ -244,7 +244,11 @@ function computeSummary(entries: TimeEntry[]): ReportSummary {
   // Stakeholder". They ARE counted under summary.absence for the
   // separate absence KPIs.
   const workEntries = entries.filter((e) => !isAbsenceEntry(e));
-  const totalMs = computeWallClockMs(workEntries);
+  // Naive sum of work durations — keeps reports in sync with the
+  // dashboard headline KPIs and dimension breakdowns. Parallel work
+  // (two media calls in the same hour) counts in full, matching how
+  // the user reads the day in the entries list.
+  const totalMs = workEntries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0);
   const totalHours = totalMs / 3_600_000;
   const dates = new Set(workEntries.map((e) => e.date));
   const workdays = dates.size;
@@ -252,7 +256,8 @@ function computeSummary(entries: TimeEntry[]): ReportSummary {
   const avgVsGoalPct = DAILY_GOAL_HOURS > 0 ? (avgPerWorkday / DAILY_GOAL_HOURS) * 100 : 0;
 
   const productiveEntries = workEntries.filter(isProductive);
-  const productiveHours = computeWallClockMs(productiveEntries) / 3_600_000;
+  const productiveHours =
+    productiveEntries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0) / 3_600_000;
   const productivityPct = totalHours > 0 ? (productiveHours / totalHours) * 100 : 0;
 
   const stakeholders = new Set<string>();
@@ -356,7 +361,12 @@ function computeTimeline(entries: TimeEntry[], includeNotes: boolean): { days: T
   const days: TimelineDay[] = Array.from(dayBuckets.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([date, dayEntries]) => {
-      const hours = computeUnionMs(dayEntries) / 3_600_000;
+      // Naive sum per day — keeps the timeline day-bars consistent with
+      // the report's headline totals (also naive sum). Switched from
+      // computeUnionMs alongside the dashboard semantic change.
+      const hours =
+        dayEntries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0) /
+        3_600_000;
       // Dominant project: highest sum (naive — projects per entry don't overlap conceptually)
       const projectMap = new Map<string, number>();
       const stakeholderMap = new Map<string, number>();
@@ -576,7 +586,12 @@ function computeNotable(entries: TimeEntry[]): NotableItem[] {
   }
 
   const dayHours = Array.from(dayBuckets.entries())
-    .map(([date, dayEntries]) => ({ date, hours: computeUnionMs(dayEntries) / 3_600_000 }))
+    .map(([date, dayEntries]) => ({
+      date,
+      hours:
+        dayEntries.reduce((sum, e) => sum + getEffectiveDurationMs(e), 0) /
+        3_600_000,
+    }))
     .filter((d) => d.hours > 0)
     .sort((a, b) => a.date.localeCompare(b.date));
 
