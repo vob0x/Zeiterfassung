@@ -201,20 +201,21 @@ export const de = {
     deletedRestored: "Eintrag wiederhergestellt",
   },
 
-  // DayRing-Labels (Doppelring im Timer-Tab)
+  // DayRing-Labels (Doppelring im Timer-Tab) — Präsenz aussen, Getrackt innen
   ring: {
-    recorded: "Erfasst",  // innerer Ring — naive Summe
-    presence: "Präsenz",  // äusserer Ring — Wallclock
+    recorded: "Erfasst",      // legacy, ggf. ungenutzt
+    presence: "Präsenz",      // legacy
+    presenceLabel: "Präsenz (erster Eintrag → letzter Eintrag)",
+    trackedLabel: "Getrackt (Wallclock-Union)",
   },
 
-  // Tracking-Coverage Widget (Timer-Tab) — bewusst andere Labels als
-  // die Dashboard-Headline ("Erfasst Heute"), damit es nicht zur
-  // Verwechslung kommt.
+  // Tracking-Coverage Widget (Timer-Tab) — Disclaimer und Lücken
   coverage: {
-    label: "Tracker aktiv:",
+    label: "Getrackt:",
     of: "von",
-    brutto: "Brutto",
-    subtitle: "Wallclock — Multitasking nicht doppelt gezählt",
+    presence: "Präsenz",
+    brutto: "Brutto", // legacy
+    subtitle: "",     // legacy, jetzt im Ring-Label statt Coverage
     oneGap: "1 Lücke · {dur}",
     nGaps: "{n} Lücken · {dur} insgesamt",
     hint: "Lücken ≥30min sind hervorgehoben — vermutlich vergessen zu tracken.",

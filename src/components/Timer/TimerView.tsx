@@ -4,7 +4,7 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useI18n } from '../../i18n';
 import { useIsMitarbeiter } from '../../hooks/useRole';
-import { formatDurationHM, getTodayISO, getEffectiveDurationMs, computeLiveWallClockMs } from '../../lib/utils';
+import { formatDurationHM, getTodayISO, getEffectiveDurationMs, computeLiveWallClockMs, computePresenceMs } from '../../lib/utils';
 import { isAbsenceEntry } from '../../lib/absences';
 import { Plus } from 'lucide-react';
 import TimerLane from './TimerLane';
@@ -77,29 +77,31 @@ const TimerView: React.FC = () => {
   // Daily goal: 8:24
   const dailyGoalMs = 8 * 3600 * 1000 + 24 * 60 * 1000;
 
-  // Live combined total: saved naive sum + running-timer elapsed sum.
-  // Naive throughout — when a running timer stops, its elapsed time
-  // becomes a saved entry of the same duration, so the headline value
-  // doesn't move. Parallel running timers add up (each one is real
-  // tracked work, not a virtual overlap to collapse).
-  const combinedMs = useMemo(() => {
-    let runningSum = 0;
-    for (const s of taskSlots) {
-      if (s.isPaused) continue;
-      runningSum += getSlotElapsed(s.id);
-    }
-    return todayTotalMs + runningSum;
-  }, [todayTotalMs, taskSlots, getSlotElapsed]);
+  // (Naive sum of saved + running was the previous DayRing centre value;
+  // the ring now shows Präsenz/Getrackt instead, so this value is no
+  // longer needed. The naive sum still drives the Dashboard headline,
+  // which has its own computation.)
 
-  // Wall-clock-union of saved entries + virtual running-timer intervals.
-  // Drives the OUTER ring of the DayRing (Präsenzzeit). Stable across
-  // stop transitions because the running interval is replaced by an
-  // identical real entry when the timer is saved — union is invariant.
-  const wallclockMs = useMemo(() => {
+  // Tracked time (wall-clock-union) — drives the INNER ring of DayRing.
+  // Stable across stop transitions: when a running timer is saved, the
+  // virtual interval is replaced by an identical real entry, union
+  // doesn't move.
+  const trackedMs = useMemo(() => {
     const runningSlotsForUnion = taskSlots
       .filter((s) => !s.isPaused)
       .map((s) => ({ elapsedMs: getSlotElapsed(s.id), isPaused: false }));
     return computeLiveWallClockMs(todayEntries, runningSlotsForUnion);
+  }, [todayEntries, taskSlots, getSlotElapsed]);
+
+  // Brutto presence window — first start to last end (or to "now" if a
+  // timer is still running). Drives the OUTER ring and the goal-reached
+  // status. Always ≥ trackedMs by construction. The visual gap between
+  // the two rings is exactly the un-tracked time inside the day.
+  const presenceMs = useMemo(() => {
+    const runningSlots = taskSlots
+      .filter((s) => !s.isPaused)
+      .map((s) => ({ elapsedMs: getSlotElapsed(s.id), isPaused: false }));
+    return computePresenceMs(todayEntries, runningSlots);
   }, [todayEntries, taskSlots, getSlotElapsed]);
 
   const hasActiveTimers = taskSlots.some((s) => !s.isPaused || s.pausedMs > 0);
@@ -385,8 +387,8 @@ const TimerView: React.FC = () => {
           >
             <DayRing
               segments={segments}
-              totalMs={combinedMs}
-              wallclockMs={wallclockMs}
+              trackedMs={trackedMs}
+              presenceMs={presenceMs}
               goalMs={dailyGoalMs}
             />
 

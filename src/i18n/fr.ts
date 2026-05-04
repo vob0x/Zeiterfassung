@@ -203,18 +203,19 @@ export const fr = {
 
   // Labels du DayRing (anneau double dans l'onglet Timer)
   ring: {
-    recorded: "Saisi",     // anneau intérieur — somme naïve
-    presence: "Présence",  // anneau extérieur — Wallclock
+    recorded: "Saisi",          // legacy
+    presence: "Présence",       // legacy
+    presenceLabel: "Présence (première entrée → dernière entrée)",
+    trackedLabel: "Suivi (Wallclock-Union)",
   },
 
-  // Widget de couverture du tracking (onglet Timer) — labels distincts
-  // de la Headline du Dashboard ("Saisie aujourd'hui") pour éviter la
-  // confusion.
+  // Widget de couverture du tracking (onglet Timer)
   coverage: {
-    label: "Chrono actif :",
+    label: "Suivi :",
     of: "sur",
-    brutto: "Brut",
-    subtitle: "Wallclock — pas de double comptage du multitâche",
+    presence: "Présence",
+    brutto: "Brut",       // legacy
+    subtitle: "",         // legacy
     oneGap: "1 trou · {dur}",
     nGaps: "{n} trous · {dur} au total",
     hint: "Les trous ≥30min sont mis en évidence — probablement oubliés.",

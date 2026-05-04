@@ -9,194 +9,271 @@ interface Segment {
 }
 
 interface DayRingProps {
-  /** Per-task colored slices for the inner ring (Erfasst / naive sum). */
+  /** Per-task colored slices for visual breakdown. We use them only as
+   *  hint colors on the inner ring (each running task contributes its
+   *  share of the tracked-time slice). */
   segments: Segment[];
-  /** Total naive sum (= sum of segments.ms). Drives the inner ring fill. */
-  totalMs: number;
-  /** Wall-clock-union of today's tracking. Drives the outer ring fill. */
-  wallclockMs: number;
-  /** Daily presence goal — the outer ring fills proportionally to this. */
+  /** Wall-clock-union of today's tracked time (= "Getrackte Zeit"). */
+  trackedMs: number;
+  /** Brutto presence window: earliest entry start → latest entry end
+   *  (extended to "now" if a timer is still running). */
+  presenceMs: number;
+  /** Daily presence goal — drives the goal-reached state. */
   goalMs: number;
 }
 
 /**
- * Two concentric rings:
- *   - Outer = Präsenzzeit (wall-clock-union). Fills toward the daily goal.
- *     Hits the "✓ Ziel erreicht" state when actual physical work meets
- *     the goal, NOT when the naive sum coincidentally crosses (which
- *     could happen via heavy multitasking with little actual presence).
- *   - Inner = Erfasste Zeit (naive sum). Coloured per-task segments.
- *     Same circumference as outer, so visually the inner ring filling
- *     "past" the outer arc means the user did more multitasking than
- *     wall-clock time would suggest. That's the visual story we want
- *     the user to read at a glance.
+ * Two concentric rings — fundamentally a "tracking-coverage" widget:
+ *   - Outer  = Präsenzzeit (brutto window: first entry start → last
+ *              entry end, extended to "now" by any running timer).
+ *              Drives the daily goal indicator: "Ziel erreicht" fires
+ *              when actual presence ≥ goalMs.
+ *   - Inner  = Getrackte Zeit (wall-clock-union of all intervals where
+ *              a timer was active). By definition tracked ≤ presence.
+ *              The visible gap between the two rings is the "Lücken"
+ *              total — exactly what the gap list below the ring spells
+ *              out, so the disclaimer makes sense.
  *
- * Both rings use the same goal scale for direct visual comparison.
- * The naive total can exceed the goal — we allow up to ~15% overshoot
- * before clipping; in extreme multitasking days the inner ring just
- * looks "fuller than full", which is the right signal.
+ * Naive "Erfasst Heute" (multitasking sum from the Dashboard) lives in
+ * the Dashboard headline — it answers a different question ("how much
+ * work effort did I produce") and doesn't belong inside the ring widget,
+ * which is about day-shape (presence + coverage).
  */
-const DayRing: React.FC<DayRingProps> = ({ segments, totalMs, wallclockMs, goalMs }) => {
+const DayRing: React.FC<DayRingProps> = ({ segments, trackedMs, presenceMs, goalMs }) => {
   const { t } = useI18n();
-  // Outer ring (Präsenz)
   const rOuter = 62;
-  // Inner ring (Erfasst) — leave breathing room so the two are clearly
-  // separated visually.
   const rInner = 48;
   const cx = 78;
   const cy = 78;
   const circOuter = 2 * Math.PI * rOuter;
   const circInner = 2 * Math.PI * rInner;
 
-  // Scaling: cap visual fill at 1.15 of goal to prevent the arc from
-  // swallowing itself on extreme overshoot, but the actual numeric
-  // values still render truthfully in the centre.
-  const wallclockPct = Math.min(wallclockMs / goalMs, 1.15);
-  const naivePct = Math.min(totalMs / goalMs, 1.15);
-  const overGoal = wallclockMs >= goalMs;
+  // Both rings scale against the daily goal so they're directly comparable.
+  // 1.15× cap prevents the arc from overlapping itself on heavy overshoot;
+  // the truthful numbers still render in the centre.
+  const presencePct = Math.min(presenceMs / Math.max(goalMs, 1), 1.15);
+  const trackedPct = Math.min(trackedMs / Math.max(goalMs, 1), 1.15);
+  const overGoal = presenceMs >= goalMs;
 
-  // Outer ring is a single solid arc — wall-clock has no per-task
-  // breakdown (overlapping tasks already merged into one interval).
-  const outerOffset = circOuter * (1 - wallclockPct);
+  const outerOffset = circOuter * (1 - presencePct);
 
-  // Inner ring: stack segments around the circle proportional to each
-  // segment's share of the naive total. We treat the goal as the scale
-  // so 8:24 worth of work fills the ring; multitasking past that just
-  // visually overshoots.
+  // Inner ring: by default a single solid arc proportional to trackedMs.
+  // If we have segment colors and multiple non-trivial slices, we split
+  // the inner arc proportionally — pure visual flavor; the numeric
+  // truth is just `trackedMs`.
   const innerArcs: { color: string; dashoffset: number }[] = [];
-  let cum = 0;
-  const totalForScale = Math.max(totalMs, 1);
-  segments.forEach((seg) => {
-    const p = (seg.ms / totalForScale) * naivePct;
-    innerArcs.push({ color: seg.color, dashoffset: circInner * (1 - cum - p) });
-    cum += p;
-  });
+  const validSegments = segments.filter((s) => s.ms >= 1000);
+  if (validSegments.length > 1) {
+    const segTotal = validSegments.reduce((s, x) => s + x.ms, 0) || 1;
+    let cum = 0;
+    for (const seg of validSegments) {
+      const p = (seg.ms / segTotal) * trackedPct;
+      innerArcs.push({ color: seg.color, dashoffset: circInner * (1 - cum - p) });
+      cum += p;
+    }
+  } else {
+    // single solid arc for the tracked total
+    innerArcs.push({
+      color: 'var(--accent, #C9A962)',
+      dashoffset: circInner * (1 - trackedPct),
+    });
+  }
+
+  const coveragePct =
+    presenceMs > 0 ? Math.round((trackedMs / presenceMs) * 100) : 0;
 
   return (
-    <div style={{ position: 'relative', width: 156, height: 156, flexShrink: 0 }}>
-      <svg width={156} height={156} viewBox="0 0 156 156">
-        {/* Outer background */}
-        <circle
-          cx={cx}
-          cy={cy}
-          r={rOuter}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={7}
-          opacity={0.08}
-          style={{ color: 'var(--text)' }}
-        />
-        {/* Outer ring — Präsenzzeit */}
-        <circle
-          cx={cx}
-          cy={cy}
-          r={rOuter}
-          fill="none"
-          stroke={overGoal ? '#6EC49E' : 'var(--text-muted)'}
-          strokeWidth={7}
-          strokeLinecap="round"
-          strokeDasharray={circOuter}
-          strokeDashoffset={outerOffset}
-          transform={`rotate(-90 ${cx} ${cy})`}
-          style={{ transition: 'stroke-dashoffset 1s ease, stroke 0.4s ease', opacity: 0.85 }}
-        />
-        {/* Goal marker dot at 12 o'clock — indicates 100% on outer ring */}
-        <circle
-          cx={cx}
-          cy={cy - rOuter}
-          r={2.5}
-          fill={overGoal ? '#6EC49E' : '#4D4941'}
-        />
-
-        {/* Inner background */}
-        <circle
-          cx={cx}
-          cy={cy}
-          r={rInner}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={6}
-          opacity={0.06}
-          style={{ color: 'var(--text)' }}
-        />
-        {/* Inner ring — Erfasste Zeit, segmented per task */}
-        {innerArcs.map((a, i) => (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 12,
+        width: '100%',
+      }}
+    >
+      <div style={{ position: 'relative', width: 156, height: 156, flexShrink: 0 }}>
+        <svg width={156} height={156} viewBox="0 0 156 156">
+          {/* Outer background */}
           <circle
-            key={i}
+            cx={cx}
+            cy={cy}
+            r={rOuter}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={7}
+            opacity={0.08}
+            style={{ color: 'var(--text)' }}
+          />
+          {/* Outer ring — Präsenzzeit */}
+          <circle
+            cx={cx}
+            cy={cy}
+            r={rOuter}
+            fill="none"
+            stroke={overGoal ? '#6EC49E' : 'var(--text-muted)'}
+            strokeWidth={7}
+            strokeLinecap="round"
+            strokeDasharray={circOuter}
+            strokeDashoffset={outerOffset}
+            transform={`rotate(-90 ${cx} ${cy})`}
+            style={{ transition: 'stroke-dashoffset 1s ease, stroke 0.4s ease', opacity: 0.85 }}
+          />
+          {/* Goal marker dot at 12 o'clock */}
+          <circle
+            cx={cx}
+            cy={cy - rOuter}
+            r={2.5}
+            fill={overGoal ? '#6EC49E' : '#4D4941'}
+          />
+
+          {/* Inner background */}
+          <circle
             cx={cx}
             cy={cy}
             r={rInner}
             fill="none"
-            stroke={a.color}
+            stroke="currentColor"
             strokeWidth={6}
-            strokeLinecap="round"
-            strokeDasharray={circInner}
-            strokeDashoffset={a.dashoffset}
-            transform={`rotate(-90 ${cx} ${cy})`}
-            style={{ transition: 'stroke-dashoffset 1s ease', opacity: 0.85 }}
+            opacity={0.06}
+            style={{ color: 'var(--text)' }}
           />
-        ))}
-      </svg>
+          {/* Inner ring — Getrackte Zeit */}
+          {innerArcs.map((a, i) => (
+            <circle
+              key={i}
+              cx={cx}
+              cy={cy}
+              r={rInner}
+              fill="none"
+              stroke={a.color}
+              strokeWidth={6}
+              strokeLinecap="round"
+              strokeDasharray={circInner}
+              strokeDashoffset={a.dashoffset}
+              transform={`rotate(-90 ${cx} ${cy})`}
+              style={{ transition: 'stroke-dashoffset 1s ease', opacity: 0.85 }}
+            />
+          ))}
+        </svg>
+
+        {/* Center text — single big number = Präsenzzeit (the goal-relevant
+            number), with goal status. Tracked time is shown in the legend
+            below the ring with full label. */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 0,
+          }}
+        >
+          <span
+            className="font-mono"
+            style={{
+              fontSize: 26,
+              fontWeight: 800,
+              color: 'var(--text)',
+              letterSpacing: '-0.02em',
+              lineHeight: 1.05,
+            }}
+          >
+            {formatDurationHM(presenceMs)}
+          </span>
+          <span
+            style={{
+              fontSize: 9,
+              color: overGoal ? 'var(--success)' : 'var(--text-muted)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              marginTop: 2,
+            }}
+          >
+            {overGoal ? `✓ ${t('timer.goalReached')}` : `/ ${formatDurationHM(goalMs)}`}
+          </span>
+        </div>
+      </div>
+
+      {/* Labelled legend below the ring — explicit names, no abbreviations,
+          no label collision with the Dashboard. */}
       <div
         style={{
-          position: 'absolute',
-          inset: 0,
+          width: '100%',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 0,
+          gap: 6,
+          fontSize: 12,
         }}
       >
-        {/* Big number = naive Erfasst (matches Dashboard headline) */}
-        <span
-          className="font-mono"
+        <div
           style={{
-            fontSize: 22,
-            fontWeight: 800,
-            color: 'var(--text)',
-            letterSpacing: '-0.02em',
-            lineHeight: 1.1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
           }}
         >
-          {formatDurationHM(totalMs)}
-        </span>
-        <span
-          style={{
-            fontSize: 9,
-            color: 'var(--text-muted)',
-            letterSpacing: '0.05em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {t('ring.recorded')}
-        </span>
-        {/* Smaller line = wall-clock Präsenz, with goal-reached feedback */}
-        <span
-          className="font-mono"
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: overGoal ? 'var(--success)' : 'var(--text-muted)',
-            marginTop: 4,
-            letterSpacing: '-0.01em',
-          }}
-        >
-          {formatDurationHM(wallclockMs)}
-          <span style={{ fontSize: 9, marginLeft: 3, opacity: 0.7 }}>
-            / {formatDurationHM(goalMs)}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 3,
+                border: `2px solid ${overGoal ? '#6EC49E' : 'var(--text-muted)'}`,
+                opacity: 0.85,
+                flexShrink: 0,
+              }}
+            />
+            <span style={{ color: 'var(--text)' }}>{t('ring.presenceLabel')}</span>
           </span>
-        </span>
-        <span
+          <span
+            className="font-mono"
+            style={{ color: 'var(--text)', fontWeight: 600 }}
+          >
+            {formatDurationHM(presenceMs)}
+          </span>
+        </div>
+        <div
           style={{
-            fontSize: 9,
-            color: overGoal ? 'var(--success)' : 'var(--text-muted)',
-            letterSpacing: '0.05em',
-            textTransform: 'uppercase',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
           }}
         >
-          {overGoal ? `✓ ${t('timer.goalReached')}` : t('ring.presence')}
-        </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 3,
+                background: 'var(--accent, #C9A962)',
+                opacity: 0.85,
+                flexShrink: 0,
+              }}
+            />
+            <span style={{ color: 'var(--text)' }}>{t('ring.trackedLabel')}</span>
+          </span>
+          <span
+            className="font-mono"
+            style={{ color: 'var(--text)', fontWeight: 600 }}
+          >
+            {formatDurationHM(trackedMs)}
+            <span
+              style={{
+                fontSize: 10,
+                color: 'var(--text-muted)',
+                marginLeft: 6,
+                fontWeight: 400,
+              }}
+            >
+              ({coveragePct}%)
+            </span>
+          </span>
+        </div>
       </div>
     </div>
   );

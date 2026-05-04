@@ -63,7 +63,7 @@ const TrackingCoverage: React.FC = () => {
             </span>
             <strong>{formatDuration(trackedMs)}</strong>{' '}
             <span style={{ color: 'var(--text-muted)' }}>
-              {t('coverage.of')} {formatDuration(bruttoMs)} {t('coverage.brutto')}
+              {t('coverage.of')} {formatDuration(bruttoMs)} {t('coverage.presence')}
             </span>
             <span
               style={{
@@ -73,16 +73,6 @@ const TrackingCoverage: React.FC = () => {
             >
               ({coveragePct}%)
             </span>
-          </div>
-          <div
-            style={{
-              color: 'var(--text-muted)',
-              fontSize: '10px',
-              marginTop: '2px',
-              fontStyle: 'italic',
-            }}
-          >
-            {t('coverage.subtitle')}
           </div>
           {hasGaps && (
             <div

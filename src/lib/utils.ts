@@ -383,6 +383,63 @@ export function computeLiveWallClockMs(
 }
 
 /**
+ * Presence window for the current day: time between the earliest tracked
+ * start and the latest tracked end (or "now" if a timer is still running).
+ *
+ * This is the "brutto Anwesenheit" semantic — how long was the user at
+ * work, regardless of how much of that they actually tracked. Lücken
+ * (gaps) live INSIDE this window: presence − tracked = gaps.
+ *
+ * Why not use a fixed 8-hour day or a clock-in/clock-out feature: the
+ * user's actual day length varies (early start, late finish, half days,
+ * vacation half-days). Using earliest-start / latest-end keeps the
+ * widget honest with whatever the user actually did.
+ *
+ * Returns 0 if there are no entries and no running timers — caller
+ * should not show the widget at all in that case.
+ */
+export function computePresenceMs(
+  savedEntries: Array<{ date: string; start_time: string; end_time: string }>,
+  runningTimers: Array<{ elapsedMs: number; isPaused?: boolean }>,
+  now: Date = new Date()
+): number {
+  const todayISO = formatDateISO(now);
+  const entries = savedEntries.filter((e) => e.date === todayISO);
+
+  const toMin = (t: string): number | null => {
+    if (!t) return null;
+    const [h, m] = t.split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    return h * 60 + m;
+  };
+
+  let earliestStart: number | null = null;
+  let latestEnd: number | null = null;
+
+  for (const e of entries) {
+    const s = toMin(e.start_time);
+    let en = toMin(e.end_time);
+    if (s == null || en == null) continue;
+    if (en < s) en += 24 * 60; // overnight wrap
+    if (earliestStart == null || s < earliestStart) earliestStart = s;
+    if (latestEnd == null || en > latestEnd) latestEnd = en;
+  }
+
+  // Running timers extend the brutto window — earliest start could be
+  // a running timer that hasn't been saved yet, latest end is "now".
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  for (const t of runningTimers) {
+    if (!t || t.isPaused || !t.elapsedMs || t.elapsedMs < 1000) continue;
+    const startMin = nowMin - Math.floor(t.elapsedMs / 60_000);
+    if (earliestStart == null || startMin < earliestStart) earliestStart = startMin;
+    if (latestEnd == null || nowMin > latestEnd) latestEnd = nowMin;
+  }
+
+  if (earliestStart == null || latestEnd == null) return 0;
+  return Math.max(0, (latestEnd - earliestStart) * 60_000);
+}
+
+/**
  * Tracking-coverage gap detector.
  *
  * Builds the wall-clock-union of the given entries (per-day) and returns
