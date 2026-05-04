@@ -94,62 +94,58 @@ function effectiveDurationMs(e: TimeEntry): number {
 }
 
 /**
- * Find connected components of overlapping entries within a group of
- * entries that already share dimensions. Uses a tiny union-find — for
- * the typical case of <10 entries per group this is overkill but keeps
- * the algorithm clean.
+ * Within a dimension bucket, return all PAIRS of entries that overlap
+ * directly. No transitive clustering — three entries A-B-C where A∩B
+ * and B∩C overlap but A∩C don't would have given a 3-element cluster
+ * under union-find, suggesting all three are duplicates of each other.
+ * In reality A and C may be entirely legitimate separate sessions and
+ * only B is the suspect duplicate. The pair-only output makes that
+ * clear: emit (A,B) and (B,C) separately, let the user judge each
+ * relationship on its own merits.
  */
-function clusterOverlapping(entries: TimeEntry[]): TimeEntry[][] {
+function findOverlappingPairs(entries: TimeEntry[]): [TimeEntry, TimeEntry][] {
+  const pairs: [TimeEntry, TimeEntry][] = [];
   const n = entries.length;
-  if (n < 2) return [];
-  const parent = Array.from({ length: n }, (_, i) => i);
-  const find = (x: number): number => {
-    while (parent[x] !== x) {
-      parent[x] = parent[parent[x]];
-      x = parent[x];
-    }
-    return x;
-  };
-  const union = (a: number, b: number) => {
-    const ra = find(a);
-    const rb = find(b);
-    if (ra !== rb) parent[ra] = rb;
-  };
+  if (n < 2) return pairs;
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      if (intervalsOverlap(entries[i], entries[j])) union(i, j);
+      if (intervalsOverlap(entries[i], entries[j])) {
+        pairs.push([entries[i], entries[j]]);
+      }
     }
   }
-  // Bucket by root
-  const buckets = new Map<number, TimeEntry[]>();
-  for (let i = 0; i < n; i++) {
-    const r = find(i);
-    const b = buckets.get(r);
-    if (b) b.push(entries[i]);
-    else buckets.set(r, [entries[i]]);
-  }
-  // Only return clusters with ≥2 entries
-  return Array.from(buckets.values()).filter((c) => c.length >= 2);
+  return pairs;
 }
 
 /**
- * Pick the keeper from a cluster. Strategy:
+ * Pick the SUGGESTED keeper from a pair. The user can override in the UI.
+ * Strategy:
  *   1. Longest effective duration wins (the longer entry is more likely
  *      to be the "complete" capture; the shorter is the truncated dupe).
  *   2. Tie-breaker: latest updated_at (more recent edits = user intent).
  *   3. Final tie-breaker: id (stable).
  */
-function pickKeeper(cluster: TimeEntry[]): { keeper: TimeEntry; duplicates: TimeEntry[] } {
-  const sorted = [...cluster].sort((a, b) => {
-    const da = effectiveDurationMs(a);
-    const db = effectiveDurationMs(b);
-    if (db !== da) return db - da;
+function pickKeeper(pair: [TimeEntry, TimeEntry]): { keeper: TimeEntry; duplicates: TimeEntry[] } {
+  const [a, b] = pair;
+  const da = effectiveDurationMs(a);
+  const db = effectiveDurationMs(b);
+  let keeper: TimeEntry;
+  let other: TimeEntry;
+  if (da !== db) {
+    keeper = da > db ? a : b;
+    other = da > db ? b : a;
+  } else {
     const ua = a.updated_at || '';
     const ub = b.updated_at || '';
-    if (ub !== ua) return ub.localeCompare(ua);
-    return a.id.localeCompare(b.id);
-  });
-  return { keeper: sorted[0], duplicates: sorted.slice(1) };
+    if (ua !== ub) {
+      keeper = ua > ub ? a : b;
+      other = ua > ub ? b : a;
+    } else {
+      keeper = a.id <= b.id ? a : b;
+      other = a.id <= b.id ? b : a;
+    }
+  }
+  return { keeper, duplicates: [other] };
 }
 
 /**
@@ -177,9 +173,9 @@ export function findNearDuplicateGroups(entries: TimeEntry[]): DuplicateGroup[] 
   const groups: DuplicateGroup[] = [];
   byDims.forEach((bucket) => {
     if (bucket.length < 2) return;
-    const clusters = clusterOverlapping(bucket);
-    for (const cluster of clusters) {
-      groups.push(pickKeeper(cluster));
+    const pairs = findOverlappingPairs(bucket);
+    for (const pair of pairs) {
+      groups.push(pickKeeper(pair));
     }
   });
 

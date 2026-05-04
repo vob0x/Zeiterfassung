@@ -185,8 +185,11 @@ export const fr = {
     entryDupesNone: "Aucun doublon trouvé — tout est propre.",
     entryDupesKeep: "Conserver",
     entryDupesDelete: "Supprimer",
-    entryDupesApply: "Supprimer les doublons",
+    entryDupesApply: "Supprimer le doublon",
+    entryDupesApplyAll: "Supprimer tous les sélectionnés",
     entryDupesCleanAll: "Tout nettoyer",
+    entryDupesSkip: "Ignorer",
+    entryDupesHintV2: "Pour chaque paire, l'entrée la plus longue est suggérée comme 'Conserver', la plus courte comme 'Supprimer'. Cliquez sur une entrée pour inverser le choix. 'Supprimer le doublon' supprime uniquement l'entrée marquée 'Supprimer'.",
     dupesRemoved: "doublon(s) supprimé(s).",
     deletedRecover: "Restaurer les suppressions accidentelles",
     deletedRecoverHint: "Affiche les entrées supprimées (soft-delete) des 30 derniers jours. Utile après un clic accidentel sur 'Tout nettoyer' — les entrées supprimées restent en Supabase avec un tombstone et peuvent être restaurées individuellement.",
@@ -198,11 +201,20 @@ export const fr = {
     deletedRestored: "Entrée restaurée",
   },
 
-  // Widget de couverture du tracking (onglet Timer)
+  // Labels du DayRing (anneau double dans l'onglet Timer)
+  ring: {
+    recorded: "Saisi",     // anneau intérieur — somme naïve
+    presence: "Présence",  // anneau extérieur — Wallclock
+  },
+
+  // Widget de couverture du tracking (onglet Timer) — labels distincts
+  // de la Headline du Dashboard ("Saisie aujourd'hui") pour éviter la
+  // confusion.
   coverage: {
-    label: "Saisi :",
+    label: "Chrono actif :",
     of: "sur",
     brutto: "Brut",
+    subtitle: "Wallclock — pas de double comptage du multitâche",
     oneGap: "1 trou · {dur}",
     nGaps: "{n} trous · {dur} au total",
     hint: "Les trous ≥30min sont mis en évidence — probablement oubliés.",

@@ -2,92 +2,127 @@
  * EntryDuplicatesPanel — Verwaltung-Sektion zum Aufräumen von Near-
  * Duplicates in den Time-Entries. Sichtbar nur für Admin / Solo.
  *
- * Triggert findNearDuplicateGroups() auf entries[] und zeigt Cluster
- * (gleiche Dimensionen, gleicher Tag, überlappende Intervalle). Pro
- * Cluster ist die längste Erfassung als "Keeper" vorgeschlagen, alle
- * anderen als Lösch-Kandidaten markiert.
+ * findNearDuplicateGroups gibt jetzt PAARE zurück (kein transitives
+ * Clustering mehr — siehe lib/duplicates.ts). Pro Paar ist die längere
+ * Erfassung als Default-Keeper vorgeschlagen, aber der User kann per
+ * Klick die Auswahl umkehren. Erst wenn er „Duplikat entfernen" drückt,
+ * wird tatsächlich gelöscht.
  *
- * UX-Entscheidung: keine Auto-Aktion, kein Default-Häkchen, kein
- * Bulk-Klick ohne Bestätigung. Doppelte Einträge zu löschen ist
- * destruktiv — der User soll jeden Vorschlag aktiv freigeben.
+ * UX-Entscheidung: keine Auto-Aktion. Doppelte Einträge zu löschen ist
+ * destruktiv — der User soll jeden Vorschlag aktiv bestätigen UND
+ * jederzeit umkehren können. Default-Vorschlag spart Klicks im
+ * Standardfall, blockiert aber nicht den Edge-Case wo der User den
+ * KÜRZEREN behalten will.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Trash2, Layers, Check } from 'lucide-react';
 import { useEntriesStore } from '../../stores/entriesStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useI18n } from '../../i18n';
 import { findNearDuplicateGroups, DuplicateGroup } from '../../lib/duplicates';
 import { formatDuration } from '../../lib/utils';
+import type { TimeEntry } from '@/types';
+
+/** Stable identifier for a pair (for state-keying and resolution tracking). */
+function pairKey(g: DuplicateGroup): string {
+  // Sort the two entry-ids so the key doesn't depend on which is keeper.
+  const ids = [g.keeper.id, ...g.duplicates.map((d) => d.id)].sort();
+  return ids.join('|');
+}
 
 const EntryDuplicatesPanel: React.FC = () => {
   const { t } = useI18n();
   const { entries, delete: deleteEntry } = useEntriesStore();
   const showToast = useUiStore((s) => s.showToast);
   const [busy, setBusy] = useState(false);
-  // Optimistic UI: groups the user has acted on get stamped with the
-  // group's keeper-id so they vanish immediately even before the
-  // entries[] change re-renders findNearDuplicateGroups output.
+  // resolvedKeys: pairs the user already acted on (or skipped) — drop
+  // them from the active list mid-session.
   const [resolvedKeys, setResolvedKeys] = useState<Set<string>>(new Set());
+  // toDeleteByKey: per-pair, which entry-id the user has marked for
+  // deletion. Initialised from the algorithm's suggestion (the shorter
+  // one) and updatable by clicking the entries.
+  const [toDeleteByKey, setToDeleteByKey] = useState<Record<string, string>>({});
 
   const groups = useMemo<DuplicateGroup[]>(() => {
     const all = findNearDuplicateGroups(entries);
-    return all.filter((g) => !resolvedKeys.has(g.keeper.id));
+    return all.filter((g) => !resolvedKeys.has(pairKey(g)));
   }, [entries, resolvedKeys]);
+
+  // Seed default selection (= algorithm's suggestion) for newly-appeared
+  // pairs. We don't overwrite existing selections so a mid-session toggle
+  // by the user persists.
+  useEffect(() => {
+    setToDeleteByKey((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const g of groups) {
+        const k = pairKey(g);
+        if (!(k in next)) {
+          next[k] = g.duplicates[0]?.id || '';
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [groups]);
 
   const total = groups.length;
 
-  const cleanGroup = async (group: DuplicateGroup) => {
+  const toggleSelection = (g: DuplicateGroup, entryId: string) => {
+    const k = pairKey(g);
+    const all = [g.keeper, ...g.duplicates];
+    if (all.length !== 2) return; // pair-only invariant
+    setToDeleteByKey((prev) => ({ ...prev, [k]: entryId }));
+  };
+
+  const applyOne = async (g: DuplicateGroup) => {
+    const k = pairKey(g);
+    const idToDelete = toDeleteByKey[k];
+    if (!idToDelete) return;
     setBusy(true);
     try {
-      // Sequential so the entries[] state stays consistent for any
-      // observers (e.g. the wall-clock counter on TimerView re-renders
-      // after each delete rather than seeing a torn state).
-      for (const dupe of group.duplicates) {
-        // eslint-disable-next-line no-await-in-loop
-        await deleteEntry(dupe.id);
-      }
-      setResolvedKeys((prev) => new Set(prev).add(group.keeper.id));
-      showToast(
-        `${group.duplicates.length} ${t('manage.dupesRemoved')}`,
-        'success'
-      );
+      await deleteEntry(idToDelete);
+      setResolvedKeys((prev) => new Set(prev).add(k));
+      showToast(`1 ${t('manage.dupesRemoved')}`, 'success');
     } catch (e) {
-      console.error('[EntryDuplicates] cleanGroup failed:', e);
+      console.error('[EntryDuplicates] applyOne failed:', e);
       showToast(t('toast.error'), 'error');
     } finally {
       setBusy(false);
     }
   };
 
-  const cleanAll = async () => {
+  const applyAll = async () => {
     setBusy(true);
     try {
       let removed = 0;
       for (const g of groups) {
-        for (const dupe of g.duplicates) {
-          // eslint-disable-next-line no-await-in-loop
-          await deleteEntry(dupe.id);
-          removed++;
-        }
+        const k = pairKey(g);
+        const idToDelete = toDeleteByKey[k];
+        if (!idToDelete) continue;
+        // eslint-disable-next-line no-await-in-loop
+        await deleteEntry(idToDelete);
+        removed++;
       }
       setResolvedKeys((prev) => {
         const next = new Set(prev);
-        for (const g of groups) next.add(g.keeper.id);
+        for (const g of groups) next.add(pairKey(g));
         return next;
       });
       showToast(`${removed} ${t('manage.dupesRemoved')}`, 'success');
     } catch (e) {
-      console.error('[EntryDuplicates] cleanAll failed:', e);
+      console.error('[EntryDuplicates] applyAll failed:', e);
       showToast(t('toast.error'), 'error');
     } finally {
       setBusy(false);
     }
   };
 
-  // Empty state — show a low-key "alles sauber" message rather than
-  // collapsing the whole card silently. Reassures the user that the
-  // tool ran and found nothing.
+  const skipPair = (g: DuplicateGroup) => {
+    setResolvedKeys((prev) => new Set(prev).add(pairKey(g)));
+  };
+
   if (total === 0) {
     return (
       <div
@@ -135,31 +170,35 @@ const EntryDuplicatesPanel: React.FC = () => {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={cleanAll}
+            onClick={applyAll}
             disabled={busy}
             style={{ fontSize: '12px', padding: '6px 12px' }}
           >
             <Check className="w-4 h-4 mr-1" />
-            {t('manage.entryDupesCleanAll')}
+            {t('manage.entryDupesApplyAll')}
           </button>
         )}
       </div>
 
       <p style={{ color: 'var(--text-muted)' }} className="text-xs">
-        {t('manage.entryDupesHint')}
+        {t('manage.entryDupesHintV2')}
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {groups.map((g) => {
+          const all: TimeEntry[] = [g.keeper, ...g.duplicates];
+          if (all.length !== 2) return null;
+          const k = pairKey(g);
+          const selectedDeleteId = toDeleteByKey[k] || g.duplicates[0]?.id;
           const ctx =
             (Array.isArray(g.keeper.stakeholder)
               ? g.keeper.stakeholder.join(', ')
               : g.keeper.stakeholder) || '—';
           const proj = g.keeper.projekt || '—';
-          const all = [g.keeper, ...g.duplicates];
+
           return (
             <div
-              key={g.keeper.id}
+              key={k}
               style={{
                 background: 'var(--card-bg, rgba(0,0,0,0.04))',
                 border: '1px solid var(--border)',
@@ -181,42 +220,49 @@ const EntryDuplicatesPanel: React.FC = () => {
               >
                 <strong style={{ color: 'var(--text)' }}>{g.keeper.date}</strong> · {ctx} / {proj}
                 {g.keeper.taetigkeit ? ` · ${g.keeper.taetigkeit}` : ''}
+                {g.keeper.notiz ? ` · ${g.keeper.notiz}` : ''}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {all.map((e) => {
-                  const isKeeper = e.id === g.keeper.id;
+                  const isSelectedForDelete = e.id === selectedDeleteId;
                   return (
-                    <div
+                    <button
                       key={e.id}
+                      type="button"
+                      onClick={() => toggleSelection(g, e.id)}
+                      disabled={busy}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        padding: '4px 8px',
+                        padding: '6px 10px',
                         borderRadius: '6px',
-                        background: isKeeper
-                          ? 'rgba(110,196,158,0.10)'
-                          : 'rgba(212,112,110,0.08)',
-                        border: `1px solid ${isKeeper ? 'rgba(110,196,158,0.35)' : 'rgba(212,112,110,0.25)'}`,
+                        background: isSelectedForDelete
+                          ? 'rgba(212,112,110,0.10)'
+                          : 'rgba(110,196,158,0.10)',
+                        border: `1px solid ${isSelectedForDelete ? 'rgba(212,112,110,0.45)' : 'rgba(110,196,158,0.45)'}`,
                         fontSize: '13px',
+                        cursor: busy ? 'wait' : 'pointer',
+                        textAlign: 'left',
+                        color: 'var(--text)',
+                        transition: 'all 0.15s',
                       }}
                     >
                       <span
                         style={{
                           fontSize: '10px',
-                          fontWeight: 600,
-                          color: isKeeper ? 'var(--success)' : 'var(--danger)',
-                          minWidth: '64px',
+                          fontWeight: 700,
+                          color: isSelectedForDelete ? 'var(--danger)' : 'var(--success)',
+                          minWidth: '70px',
                         }}
                       >
-                        {isKeeper ? t('manage.entryDupesKeep') : t('manage.entryDupesDelete')}
+                        {isSelectedForDelete ? `▸ ${t('manage.entryDupesDelete')}` : t('manage.entryDupesKeep')}
                       </span>
                       <span style={{ flex: 1 }}>
                         {e.start_time}–{e.end_time} · {formatDuration(e.duration_ms || 0)}
-                        {e.notiz ? ` · ${e.notiz}` : ''}
                       </span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -224,9 +270,18 @@ const EntryDuplicatesPanel: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
                 <button
                   type="button"
-                  className="btn btn-primary"
-                  onClick={() => cleanGroup(g)}
+                  className="btn btn-secondary"
+                  onClick={() => skipPair(g)}
                   disabled={busy}
+                  style={{ fontSize: '12px', padding: '6px 12px' }}
+                >
+                  {t('manage.entryDupesSkip')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => applyOne(g)}
+                  disabled={busy || !selectedDeleteId}
                   style={{ fontSize: '12px', padding: '6px 12px' }}
                 >
                   <Trash2 className="w-3 h-3 mr-1" />

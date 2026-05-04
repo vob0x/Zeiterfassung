@@ -185,8 +185,11 @@ export const de = {
     entryDupesNone: "Keine Duplikate gefunden — alles sauber.",
     entryDupesKeep: "Behalten",
     entryDupesDelete: "Löschen",
-    entryDupesApply: "Duplikate entfernen",
+    entryDupesApply: "Duplikat entfernen",
+    entryDupesApplyAll: "Alle gewählten entfernen",
     entryDupesCleanAll: "Alle bereinigen",
+    entryDupesSkip: "Überspringen",
+    entryDupesHintV2: "Pro Paar wird der längere Eintrag als 'Behalten' vorgeschlagen, der kürzere als 'Löschen'. Klicke einen Eintrag um die Auswahl zu spiegeln. 'Duplikat entfernen' löscht nur den als 'Löschen' markierten Eintrag.",
     dupesRemoved: "Duplikat(e) entfernt.",
     deletedRecover: "Versehentliche Löschungen wiederherstellen",
     deletedRecoverHint: "Zeigt soft-gelöschte Einträge der letzten 30 Tage. Nützlich nach einem versehentlichen 'Alle bereinigen'-Klick — gelöschte Einträge bleiben mit Tombstone in Supabase erhalten und können einzeln reaktiviert werden.",
@@ -198,11 +201,20 @@ export const de = {
     deletedRestored: "Eintrag wiederhergestellt",
   },
 
-  // Tracking-Coverage Widget (Timer-Tab)
+  // DayRing-Labels (Doppelring im Timer-Tab)
+  ring: {
+    recorded: "Erfasst",  // innerer Ring — naive Summe
+    presence: "Präsenz",  // äusserer Ring — Wallclock
+  },
+
+  // Tracking-Coverage Widget (Timer-Tab) — bewusst andere Labels als
+  // die Dashboard-Headline ("Erfasst Heute"), damit es nicht zur
+  // Verwechslung kommt.
   coverage: {
-    label: "Erfasst:",
+    label: "Tracker aktiv:",
     of: "von",
     brutto: "Brutto",
+    subtitle: "Wallclock — Multitasking nicht doppelt gezählt",
     oneGap: "1 Lücke · {dur}",
     nGaps: "{n} Lücken · {dur} insgesamt",
     hint: "Lücken ≥30min sind hervorgehoben — vermutlich vergessen zu tracken.",

@@ -58,9 +58,13 @@ const TrackingCoverage: React.FC = () => {
         <Clock size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ color: 'var(--text)' }}>
-            {t('coverage.label')}{' '}
+            <span style={{ color: 'var(--text-muted)', marginRight: '4px' }}>
+              {t('coverage.label')}
+            </span>
             <strong>{formatDuration(trackedMs)}</strong>{' '}
-            {t('coverage.of')} {formatDuration(bruttoMs)} {t('coverage.brutto')}
+            <span style={{ color: 'var(--text-muted)' }}>
+              {t('coverage.of')} {formatDuration(bruttoMs)} {t('coverage.brutto')}
+            </span>
             <span
               style={{
                 marginLeft: '6px',
@@ -70,8 +74,24 @@ const TrackingCoverage: React.FC = () => {
               ({coveragePct}%)
             </span>
           </div>
+          <div
+            style={{
+              color: 'var(--text-muted)',
+              fontSize: '10px',
+              marginTop: '2px',
+              fontStyle: 'italic',
+            }}
+          >
+            {t('coverage.subtitle')}
+          </div>
           {hasGaps && (
-            <div style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
+            <div
+              style={{
+                color: 'var(--text-muted)',
+                fontSize: '11px',
+                marginTop: '2px',
+              }}
+            >
               {gaps.length === 1
                 ? t('coverage.oneGap').replace('{dur}', formatDuration(gapMs))
                 : t('coverage.nGaps')

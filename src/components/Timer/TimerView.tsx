@@ -4,7 +4,7 @@ import { useEntriesStore } from '../../stores/entriesStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useI18n } from '../../i18n';
 import { useIsMitarbeiter } from '../../hooks/useRole';
-import { formatDurationHM, getTodayISO, getEffectiveDurationMs } from '../../lib/utils';
+import { formatDurationHM, getTodayISO, getEffectiveDurationMs, computeLiveWallClockMs } from '../../lib/utils';
 import { isAbsenceEntry } from '../../lib/absences';
 import { Plus } from 'lucide-react';
 import TimerLane from './TimerLane';
@@ -90,6 +90,17 @@ const TimerView: React.FC = () => {
     }
     return todayTotalMs + runningSum;
   }, [todayTotalMs, taskSlots, getSlotElapsed]);
+
+  // Wall-clock-union of saved entries + virtual running-timer intervals.
+  // Drives the OUTER ring of the DayRing (Präsenzzeit). Stable across
+  // stop transitions because the running interval is replaced by an
+  // identical real entry when the timer is saved — union is invariant.
+  const wallclockMs = useMemo(() => {
+    const runningSlotsForUnion = taskSlots
+      .filter((s) => !s.isPaused)
+      .map((s) => ({ elapsedMs: getSlotElapsed(s.id), isPaused: false }));
+    return computeLiveWallClockMs(todayEntries, runningSlotsForUnion);
+  }, [todayEntries, taskSlots, getSlotElapsed]);
 
   const hasActiveTimers = taskSlots.some((s) => !s.isPaused || s.pausedMs > 0);
   const runningTimers = taskSlots.filter((s) => !s.isPaused);
@@ -372,7 +383,12 @@ const TimerView: React.FC = () => {
               padding: '24px 16px',
             }}
           >
-            <DayRing segments={segments} totalMs={combinedMs} goalMs={dailyGoalMs} />
+            <DayRing
+              segments={segments}
+              totalMs={combinedMs}
+              wallclockMs={wallclockMs}
+              goalMs={dailyGoalMs}
+            />
 
             {/* Tracking-Coverage — surfaces gaps in today's tracking so
                 the user can see at-a-glance whether they forgot to start
