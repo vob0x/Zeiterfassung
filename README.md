@@ -1,5 +1,11 @@
 # Zeiterfassung V1.0 – Web & Mobile App
 
+> ⚠️ **STATUS: FROZEN** — Mai 2026.
+>
+> Diese App (v2) wird ab sofort nicht mehr aktiv weiterentwickelt. Es kommen nur noch **kritische Sicherheits- und Datenverlust-Fixes**, keine neuen Features. Die App bleibt produktiv nutzbar bis [v3](../zeiterfassung-v3/) stabil läuft.
+>
+> v3 ist ein paralleles Greenfield-Projekt mit Server-First-Architektur, läuft auf derselben Supabase-Datenbank — beim Wechsel gehen keine Daten verloren. Siehe [`ARCHITECTURE.md`](./ARCHITECTURE.md) für die Hintergründe der Entscheidung.
+
 Moderne Zeiterfassungs-App mit React, Supabase und E2E-Verschlüsselung. Erste öffentliche Version.
 
 ## Features

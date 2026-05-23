@@ -4,7 +4,26 @@ Stand: Mai 2026. Living document, wird mit jeder strukturellen Änderung mitgepf
 
 Dieses Dokument hält fest, **was die App ist** und **warum sie so gebaut ist** — getrennt vom Code. Zweck ist, dass eine spätere Person (oder eine spätere Version derselben Person) in 30 Minuten verstehen kann, warum bestimmte Entscheidungen so getroffen wurden, ohne sich durch den Commit-Log arbeiten zu müssen.
 
-Reihenfolge der Sektionen ist bewusst: erst Glossar (damit Begriffe sitzen), dann Datenmodell (das Was), dann Sync-Invarianten (die Regeln), dann Defenses (was schiefgehen kann und wie wir's auffangen), dann Dataflows (das Wie), dann Strategie (offene Fragen).
+Reihenfolge der Sektionen ist bewusst: erst Glossar (damit Begriffe sitzen), dann Datenmodell (das Was), dann Sync-Invarianten (die Regeln), dann Defenses (was schiefgehen kann und wie wir's auffangen), dann Dataflows (das Wie), dann Strategie (Antworten + Pfad).
+
+---
+
+## 0. Status & Richtung — Stand Mai 2026
+
+Die fünf Strategie-Fragen (siehe Sektion 7) sind beantwortet. Daraus folgt:
+
+**Entscheidung: Refactor in Phasen, kein Greenfield-Rewrite.**
+
+Eckpfeiler:
+- **Anwendungsmodell** bleibt: Single-User mit optionalem Team. Kein Multi-Tenant.
+- **Semantik** ist final gesetzt (Sektion 1 — Naive / Wallclock / Präsenz / Coverage).
+- **Plattform**: Desktop-first wie bisher; **PWA-Optimierung wird hinzugefügt** (Manifest, Service-Worker für Asset-Cache, Install-Prompt). Kein Mobile-Native.
+- **Sync-Modell**: **Wechsel von Local-First zu Server-First** mit lokaler Backup-Option (manueller Snapshot-Export, kein laufender Mirror). Das ist der grösste Eingriff und vereinfacht den Defense-Stack drastisch.
+- **Feature-Scope**: Timer, Manual-Entry, Dashboard, Team-View, Rollen, Backup/Restore, E2E-Encryption mit Team-Sharing, DE/FR. Reports nur für Admin, mit Auswahl Einzelreport-pro-Mitglied oder Teamreport.
+
+Die Phase 2–6-Roadmap dazu steht in Sektion 8.
+
+Was sich durch S4 (Server-First) konkret an den Sektionen ändert, ist im jeweiligen Teil mit **🔄 ändert sich** markiert.
 
 ---
 
@@ -201,7 +220,9 @@ Jeder dieser Mechanismen kam als Antwort auf einen realen Bug-Vorfall. Die Reihe
 
 **Implementiert in:** `src/lib/userStorage.ts`
 
-### D2 — Soft-Merge bei Pulls
+### D2 — Soft-Merge bei Pulls 🔄 ändert sich (Phase 3)
+> Unter Server-First entfällt die Soft-Merge-Logik komplett. Server ist Wahrheitsquelle, Pulls replacen statt zu mergen. Die ganze `localOnly`-/`sbActiveFiltered`-Mechanik wird obsolet.
+
 **Problem (Supabase IO Crisis):** Der frühere Merge replaced lokale entries[] mit Supabase-Daten. Wenn ein lokaler Eintrag noch nicht gepushed war (z.B. weil 503-Fehler), ging er beim nächsten Pull verloren.
 
 **Lösung:** Pulls mergen statt replacen. Konkret:
@@ -217,14 +238,18 @@ merged            = [...sbActiveFiltered, ...localOnly]
 
 **Implementiert in:** `entriesStore.ts` — `fetch()` und `pullEntriesFromSupabase()`.
 
-### D3 — Force-Resync (Notfall-Werkzeug)
+### D3 — Force-Resync (Notfall-Werkzeug) 🔄 entfällt (Phase 3)
+> Server-First kennt keine "lokal-pending"-Einträge — jede Aktion wird vom Server bestätigt bevor lokal angewandt. Das Werkzeug wird nicht mehr gebraucht und entfernt.
+
 **Problem:** Wenn das Pending-Tracking aus irgendeinem Grund kaputt ist (z.B. nach Sync-Crash), gibt es lokale Einträge die NICHT als pending markiert sind, aber auch nicht in Supabase liegen. Dann werden sie nie gepushed.
 
 **Lösung:** Ein Admin-Tool in der Verwaltung („Einträge jetzt synchronisieren"), das ALLE lokalen Einträge als pending markiert und dann zwangsweise zu Supabase pushed. Idempotent (`ON CONFLICT id`), also safe to retry.
 
 **Implementiert in:** `forceResyncAllLocalEntries` in `entriesStore.ts`. UI: `ManageView.tsx`.
 
-### D4 — Stop-Journal + Recovery-Banner
+### D4 — Stop-Journal + Recovery-Banner 🔄 vereinfacht (Phase 3)
+> Unter Server-First wird das Stop-Journal stark vereinfacht: Stop = `await server.create(entry)` synchron. Bei Erfolg lokales Update + Slot-Removal, bei Fehler Toast + Slot bleibt erhalten. Kein eigenes Journal mit Recovery-Banner mehr nötig — die "verschwindet stillschweigend nach happy path"-Failure-Mode existiert nicht mehr, weil der Server Wahrheit ist. Optional: kleine Retry-Queue für Netzwerk-Fehler bei der Stop-Aktion (max. 1-2 Einträge tief, kein 7-Tage-Journal).
+
 **Problem (Stop-Verluste):** Nach `await addEntry(...)` ist der Eintrag in localStorage UND möglicherweise in Supabase. Aber Bugs nach `add()` (fehlerhafter Merge, Tab-Reload, Decrypt-Glitch) konnten den Eintrag stillschweigend verschwinden lassen — ohne Pending-Spur, weil der Push schon confirmed war.
 
 **Lösung:** Vor JEDEM async-Schritt der Stop-Aktion wird ein Journal-Row in `ze_<userId>_stop_journal` geschrieben (mit pre-allocated UUID). Nach erfolgreichem `add()` wird der Journal-Row entfernt. Beim App-Boot prüft `getRecoveryCandidates(entries)`:
@@ -236,7 +261,9 @@ User klickt „Wiederherstellen" → addEntry mit der gespeicherten Original-ID.
 
 **Implementiert in:** `src/lib/stopJournal.ts`, `src/components/Timer/RecoveryBanner.tsx`. Aufgerufen aus `TimerLane.handleStop` und `timerStore.stopTimer`.
 
-### D5 — Tombstones für Cross-Device-Delete-Propagation
+### D5 — Tombstones für Cross-Device-Delete-Propagation 🔄 Rolle ändert sich (Phase 3)
+> Unter Server-First wird die Cross-Device-Propagations-Rolle obsolet (jeder Pull holt den aktuellen Server-State, Tombstone-Filtering ist nicht mehr nötig). ABER: das `deleted_at`-Feld bleibt im Schema und wird zu einem reinen **Soft-Delete-Feature** für Versehentliche-Löschungen-Wiederherstellen umgewidmet (siehe DeletedEntriesPanel). `_localTombstones` (das offline-buffer Map) entfällt.
+
 **Problem (vor Migration 20260428):** `delete()` machte echtes SQL DELETE. Andere Devices konnten nicht erkennen, ob ein Eintrag „nie gepushed" oder „gelöscht" war — Soft-Merge präservierte ihn. → Zombie-Einträge.
 
 **Lösung:** Migration 20260428 fügt `deleted_at timestamptz` zu `time_entries` hinzu. `delete()` macht UPDATE statt DELETE. Reads ziehen Tombstones MIT (filtern aber im Display). Cross-Device: Tombstone wird gepulled → lokaler Eintrag verschwindet.
@@ -400,80 +427,112 @@ Liste der Stellen, wo der Code sichtbar Geschichte trägt. Nicht zwingend Bugs, 
 
 ---
 
-## 7. Strategie-Fragen — beantworten, bevor v3.0 in Frage kommt
+## 7. Strategie-Fragen — beantwortet, Mai 2026
 
 ### S1 — Anwendungsmodell: Single-User-mit-Team oder Multi-Tenant?
-**Aktuelles Modell:** Single-User-mit-Team. Jeder User hat einen Personal Key, kann optional einem Team beitreten und bekommt dann auch einen Team Key. Nur ein Team pro User aktiv.
+**Antwort: Single-User mit Team.** Aktuelles Modell wird beibehalten. Personal Key + optionaler Team Key, ein Team pro User. Kein Multi-Tenant, keine Subscriptions.
 
-**Konsequenzen:**
-- Multi-Tenant würde User-Isolation auf DB-Ebene bedeuten (Row-Level-Security pro Tenant). Aktuell: pro User, mit Team als zusätzlicher RLS-Schicht.
-- Echtes B2B SaaS-Modell würde Subscriptions / Billing erfordern.
-- Single-User-mit-Team hält die Komplexität klein, passt zum derzeitigen Use-Case (eine Person + ihre Direct Reports).
-
-**Frage zu beantworten:** Bleibt das Modell so, oder soll v3 Multi-Tenant werden?
+**Konsequenz für Refactor:** Schema bleibt strukturell wie heute. RLS-Policies stay.
 
 ### S2 — Semantik final?
-**Stand:** Präsenz / Getrackt / Erfasst / Coverage haben wir in Sektion 1 dieses Dokuments festgeschrieben. Ist das jetzt _final_? Oder gibt es weitere Pivots?
+**Antwort: Final.** Naive / Wallclock / Präsenz / Coverage sind in Sektion 1 dieses Dokuments gesetzt. Künftige Verschiebungen brauchen explizite Doc-Änderung _bevor_ Code geschrieben wird (siehe Sektion 9 Pflege-Regel).
 
-**Kandidat:** Dashboard-Headline „Erfasst Heute" zeigt aktuell die naive Summe. Wäre es konsistenter, dort auch Präsenz anzuzeigen (analog zur Tagesübersicht-Card)? Falls ja: Dashboard-Headline-Switch ist eine letzte offene Konsistenz-Lücke.
-
-**Frage zu beantworten:** Bleiben die drei Begriffe so, oder kommt noch eine Bereinigung?
+**Konsequenz für Refactor:** Die jetzt sichtbaren Inkonsistenzen (Dashboard zeigt naive, andere Cards Präsenz) bleiben unter Refactor-Betrachtung. Ggf. in Phase 6 (Cleanup) mit harmonisieren — aber ohne nochmal die Begriffe zu kippen.
 
 ### S3 — Mobile vs Desktop?
-**Aktuell:** Desktop-first Web-App, responsive aber nicht PWA-optimiert. Kein Native-App.
+**Antwort: Desktop-first, neu PWA-optimieren.** Kein React-Native, keine Mobile-Native-App. Aber: Manifest, Service-Worker für Asset-Cache (kein Offline-Sync — siehe S4), Install-Prompt, Mobile-responsive bleiben. Ziel ist „App-like" Verhalten ohne App-Store-Pflege.
 
-**Alternativen:**
-- PWA mit Offline-First (mehr Engagement auf Mobile, App-Icon auf Home-Screen)
-- React Native Wrapper (echte Mobile-App, App Store)
-- Bleibt Web-only
-
-**Frage zu beantworten:** Lohnt sich PWA-Investment?
+**Konsequenz für Refactor:** Phase 4 in der Roadmap. PWA ist additiv, kein Re-Engineering.
 
 ### S4 — Offline-First behalten?
-**Aktuelles Modell:** Local-First-mit-optimistischem-Sync. localStorage ist Source of Truth, Supabase ist Backup + Cross-Device-Vehicle.
+**Antwort: Server-First mit lokaler Backup-Option.** Wechsel von Local-First-mit-optimistischem-Sync auf Server-First. Konkret:
+- Jede Schreibaktion (add/update/delete) ist ein synchroner Server-Roundtrip mit Confirm.
+- Kein optimistisches Lokal-Update vor Server-Confirm. Bei Netzwerkfehler: Toast + lokal nichts geändert.
+- Local Backup ist eine **separate manuelle Snapshot-Funktion** (Export/Import als Verschlüsselter JSON), kein laufender Mirror.
+- Tracker-State (Timer-Slots) bleibt lokal für flüssige UI; beim Stop wird der Server-Write angeschoben, der Slot bleibt sichtbar bis Confirm.
 
-**Alternative:** Server-First, jeder Action ein Round-Trip (klassisch). Ergibt einfachere Architektur, keine Soft-Merge / Tombstones / Pending-IDs nötig. Bricht aber bei Offline-Use komplett.
-
-**Frage zu beantworten:** Ist Offline-Use ein hard Requirement (z.B. Termine ohne Internet trackbar)? Wenn ja: Local-First behalten. Wenn nein: könnte ein Rewrite die Komplexität halbieren.
+**Konsequenz für Refactor:** Größter Eingriff. Defense-Stack D2-D5 (siehe Sektion 4) wird stark vereinfacht oder entfernt. ~30-50% Code-Reduktion in `entriesStore.ts` realistisch.
 
 ### S5 — Feature-Set: was ist Kern, was Beilage?
-**Aktuell vorhanden:**
-- Timer + Manual-Entry
-- Dashboard mit KPIs + Breakdowns + Heatmap
-- Team-View mit Tagesübersicht + Workload + Timeline
-- Reports (HTML)
-- Rollen (Admin/Mitarbeiter)
-- Backup/Restore
-- Recovery-Banner + DuplicateDetektor + DeletedEntries-Panel
-- E2E-Encryption mit Team-Sharing
-- 4 Sprachen (DE/FR via i18n; PWA + Mobile-spezifisch nicht ausgebaut)
+**Antwort:**
+- **Essenziell:** Timer + Manual-Entry, Dashboard, Team-View, Rollen (Admin/Mitarbeiter), Backup/Restore, E2E-Encryption mit Team-Sharing, 2 Sprachen (DE + FR).
+- **Reports nur Admin:** Auswahl Einzelreport-pro-Mitglied oder Teamreport. (Bisher: für alle User sichtbar.)
+- **Implizit gestrichen:** zusätzliche Sprachen über DE/FR hinaus, Mobile-Native, Multi-Tenant-Funktionen.
 
-**Frage zu beantworten:** Bei einem v3-Rewrite: was ist tatsächlich essential? Häufig wird in Rewrites zu viel mitgenommen.
+**Konsequenz für Refactor:** Phase 5 in der Roadmap. Role-Gate auf den Report-Tab + UI-Toggle „Einzelreport / Teamreport" im ReportModal.
 
 ---
 
-## 8. Bei einer v3.0-Entscheidung: Empfohlene Reihenfolge
+## 8. Refactor-Roadmap (gewählter Pfad, Stand Mai 2026)
 
-Falls die fünf Strategie-Fragen beantwortet sind und ein Rewrite tatsächlich sinnvoll erscheint, wäre die empfohlene Reihenfolge:
+Auf Basis der S1–S5-Antworten ist **kein Greenfield-Rewrite** vorgesehen. Stattdessen ein konzentrierter Phasen-Refactor. Aufwand-Schätzung in Sessions à ~2h, ist eine grobe Hausnummer.
 
-1. **Test-Harness für die jetzige App** (1-2 Sessions). Unit-Tests für `computeWallClockMs`, `computePresenceMs`, `findNearDuplicateGroups`, Soft-Merge. Macht den Rewrite-Vergleich faktisch — neuer Code muss dieselben Tests bestehen.
-2. **Daten-Export-Pfad bewahren** (1 Session). CSV-Export funktioniert ja, aber zusätzlich ein JSON-Backup-Format mit Encryption-Keys, das v3 importieren kann.
-3. **Schema-Lock** (1 Session). DB-Schema einfrieren, Migrations bis hier dokumentieren. v3 startet von hier (kein neues Schema).
-4. **Greenfield-Entwicklung** der UI + Stores, gegen das gelockte Schema und die existierenden Tests.
-5. **Side-by-Side-Phase**: v3 als separate Subdomain, User können wechseln, Daten bleiben kompatibel. Bug-Reports → Fixes in v3, alte App im Read-Only-Modus.
-6. **Cutover** wenn v3 stabil ist. Alte App archiviert, nicht gelöscht.
+### Phase 2 — Test-Harness (2 Sessions)
+Vor jedem strukturellen Eingriff: Sicherheitsnetz bauen.
+
+- Vitest-Setup (oder Jest, wenn schon konfiguriert)
+- Unit-Tests:
+  - `computeWallClockMs`, `computeLiveWallClockMs`, `computePresenceMs`
+  - `findTrackingGaps`
+  - `findNearDuplicateGroups`
+  - `entryFingerprint`, Tombstone-Helfer
+- Integration-Test: Stop → Save → Pull-Zyklus (gegen Mock-Supabase)
+- Goldener Pfad: jeder dieser Tests muss VOR und NACH dem Server-First-Refactor identische Resultate liefern. Das beweist „nichts kaputt gemacht".
+
+### Phase 3 — Server-First-Refactor (3 Sessions)
+Der eigentliche Eingriff.
+
+**Session 3a — Read-Pfad zu Server-First.** Pulls werden vom Soft-Merge zum Replace-Pull. localStorage wird zum Cache, nicht mehr zur Source of Truth. Race-Conditions zwischen Pull und User-Edit klären (User-Edits gewinnen lokal, bis nächster Pull).
+
+**Session 3b — Write-Pfad zu Server-First.** `add()`, `update()`, `delete()` werden synchron mit Server-Confirm. Pending-Tracking entfällt. Force-Resync wird entfernt. Stop-Journal wird zu einer minimalen Retry-Queue für Netzwerk-Fehler beim Stop (max. 2 offene Stops; verschwindet sobald Verbindung zurück ist).
+
+**Session 3c — Tombstone-Refactor.** `deleted_at` bleibt im Schema, aber als Soft-Delete-Feature. `_localTombstones` Map wird entfernt. Cross-Device-Propagation entfällt (Server ist Wahrheit). DeletedEntriesPanel funktioniert weiter mit dem `deleted_at`-Feld.
+
+Test-Harness aus Phase 2 läuft nach jeder Session — ist der Lackmus-Test, ob „nichts kaputt".
+
+### Phase 4 — PWA-Optimierung (1 Session)
+Additiv, ohne Architektur-Eingriff.
+
+- `manifest.json` mit Icons, Display-Mode standalone
+- Service-Worker via Vite-PWA-Plugin oder manuell:
+  - Asset-Cache (CSS/JS/Bilder) für offline-Page-Loads
+  - **Kein** API-Cache, **kein** Background-Sync — Server-First-Modell bleibt strikt
+- Install-Prompt-Banner für eligible-User
+- iOS-Add-to-Home-Screen-Meta-Tags
+
+### Phase 5 — Reports admin-only + Einzel/Team-Variante (1 Session)
+- Role-Gate: Reports-Tab nur sichtbar für `isAdmin`
+- ReportModal-UI: Toggle „Einzelreport (Mitglied wählen)" vs. „Teamreport"
+- Bei Einzelreport: Member-Picker mit Suche, Reports werden mit gefilterten Daten generiert
+- i18n: neue Strings für die Toggle-Labels und den Member-Picker
+
+### Phase 6 — Cleanup-Sweep (1 Session)
+Aufräumarbeit, die durch Phase 3 leichter wird.
+
+- `stakeholder: string | string[]` → nur `string[]`, mit One-Time-Migration
+- Tote i18n-Keys (`legacy`-markierte Einträge) entfernen
+- Tote Code-Pfade (`computeKpiHours` mit unused `_filter` etc.)
+- entriesStore-Split: `entriesStore` (state) + `entriesApi` (server-IO) — wenn Phase 3 die Logik schon stark reduziert hat, ist der Split einfach
+- Inkonsistente Headline-Semantik harmonisieren (siehe S2 Konsequenz)
+
+### Total: 8 Sessions
+Vergleich: ein realistischer Greenfield-Rewrite wäre 15-25 Sessions mit Regression-Risiko.
+
+**Meilenstein zwischen Phase 3 und 4:** vor PWA-Aktivierung lokal vollständig testen, dass der Server-First-Modus stabil läuft. Wenn S4-Antwort sich in der Praxis als Fehlentscheidung erweist (z.B. "Termine ohne Internet" doch wichtig), ist Phase 4 ein guter Re-Eval-Punkt.
 
 ---
 
 ## 9. Stand des Dokuments
 
-**Erstellt:** Mai 2026, nach ~95 Iterations-Tasks an der bestehenden App.
+**Erstellt:** Mai 2026, nach ~102 Iterations-Tasks an der bestehenden App.
+
+**Update Mai 2026:** Sektion 0 + Sektion 7 + Sektion 8 ergänzt nach Beantwortung S1-S5. Refactor-Pfad statt Greenfield-Rewrite gewählt.
 
 **Nächster Update-Trigger:**
-- Beantwortung der Strategie-Fragen S1–S5 (Sektion 7) → Update Sektion 7 mit Antworten
-- Test-Harness-Session → Sektion 8 Schritt 1 streichen, neue Sektion „Tests" einbauen
+- Phase 2 (Test-Harness) abgeschlossen → neue Sektion „Tests" einbauen, beschreibt was getestet ist
+- Phase 3 (Server-First) abgeschlossen → Sektionen 3 (Invarianten) + 4 (Defenses) konsolidieren — Streichungen einarbeiten, neue Server-First-Invarianten hinzufügen
+- Phase 4 (PWA) abgeschlossen → Sektion 2 (Datenmodell) um Service-Worker / Manifest erweitern
 - Strukturelle Code-Änderungen, die Invarianten betreffen → Update Sektion 3
-- Neue Defense-Mechanismen → Sektion 4 erweitern
 - Begriffsverschiebungen → ALARM. Erst Glossar updaten, dann Code.
 
 **Pflege-Regel:** vor jedem strukturellen Refactor (= Code-Änderung, die mehr als nur Bugfix ist) wird zuerst dieses Dokument aktualisiert. So bleibt die Dokumentation nicht nachlauf, sondern führt.
